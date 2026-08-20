@@ -307,9 +307,15 @@ function getCfg(){
 function setCfg(url,anonKey){ localStorage.setItem(CFGKEY,JSON.stringify({url:url.trim(),anonKey:anonKey.trim()})); }
 // 權限
 const canEdit  =()=>ME.role!=="檢視者";
-const canDelete=()=>["admin","PM"].includes(ME.role);
+const canDelete=()=>["admin","PM"].includes(ME.role);      // 報修工單刪除
 const canProj  =()=>["admin","PM"].includes(ME.role);      // 建立專案
 const canManage=()=>ME.role==="admin";
+// 專案刪除：admin，或「負責該專案的 PM」（以帳號姓名對應專案的 PM 欄位）
+function canDeleteProject(p){
+  if(ME.role==="admin") return true;
+  if(ME.role==="PM" && p && p.pm && ME.name && String(p.pm).trim()===String(ME.name).trim()) return true;
+  return false;
+}
 const costVisible=()=>["admin","PM"].includes(ME.role);   // 成本毛利僅 admin/PM 可見
 function applyPerm(){
   document.body.classList.toggle("ro", !canEdit());
@@ -758,7 +764,7 @@ function drawProject(p){
   m.append(el("h3",null,`${p.name} <span class="badge ${h.cls}"><span class="dot"></span>${h.txt}</span>`));
   m.append(el("div","gphase",`客戶：${p.customer}　·　PM：${p.pm}　·　進度 ${projProgress(p)}%`));
   if(canProj()){
-    const eb=el("button","btn ghost mini","✎ 編輯專案資料 / 刪除");eb.style.marginTop="8px";
+    const eb=el("button","btn ghost mini","✎ 編輯專案資料");eb.style.marginTop="8px";
     eb.onclick=()=>openProjectForm(p);
     m.append(eb);
   }
@@ -959,10 +965,12 @@ function openProjectForm(p){        // p 為 null=新增，否則=編輯
   };
   const cancel=el("button","btn ghost","取消");cancel.onclick=closeModal;
   bar.append(saveB,cancel);
-  if(!isNew && canDelete()){
+  if(!isNew && canDeleteProject(p)){
     const del=el("button","btn","刪除專案");del.style.cssText="background:var(--red);margin-left:auto";
     del.onclick=()=>{if(confirm(`確定刪除專案「${p.name}」？此動作無法復原。`)){DB.projects=DB.projects.filter(x=>x.id!==p.id);save();closeModal();}};
     bar.append(del);
+  } else if(!isNew){
+    m.append(el("div","gphase","※ 僅 admin 或本專案負責 PM 可刪除此專案。"));
   }
   m.append(bar);openModal();
 }
