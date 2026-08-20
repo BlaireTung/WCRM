@@ -933,32 +933,47 @@ function drawProject(p){
   }
 }
 const fld=(lb,inp)=>{const d=el("div","field");d.append(el("label",null,lb));d.append(inp);return d;};
-function openProjectForm(p){        // p 為 null=新增，否則=編輯
+async function openProjectForm(p){        // p 為 null=新增，否則=編輯
   const isNew=!p;
   const m=$("#modalBox");m.innerHTML="";
   m.append(el("button","x","×"));m.querySelector(".x").onclick=closeModal;
   m.append(el("h3",null,isNew?"新增專案":"編輯專案"));
   const name=el("input");name.value=p?.name||"";
   const cust=el("input");cust.value=p?.customer||"";
-  const pm=el("input");pm.value=p?.pm||"";
+  // PM 欄位：雲端→下拉選單（admin/PM/成員 帳號）；本機→文字輸入
+  let pmField, getPm;
+  if(cloud.on){
+    let members=[];
+    try{ const {data}=await cloud.sb.from("profiles").select("name,role").in("role",["admin","PM","成員"]).order("name");
+      members=(data||[]).map(x=>x.name).filter(Boolean); }catch(e){}
+    const sel=el("select");
+    const blank=el("option",null,"— 請選擇 PM —");blank.value="";sel.append(blank);
+    members.forEach(n=>{const o=el("option",null,n);o.value=n;if(p&&p.pm===n)o.selected=true;sel.append(o);});
+    if(p&&p.pm&&!members.includes(p.pm)){const o=el("option",null,p.pm+"（不在名單）");o.value=p.pm;o.selected=true;sel.append(o);}
+    pmField=sel; getPm=()=>sel.value.trim();
+  }else{
+    const inp=el("input");inp.value=p?.pm||"";inp.placeholder="PM 姓名";
+    pmField=inp; getPm=()=>inp.value.trim();
+  }
   let startD=p?.startDate?new Date(p.startDate):today();
   let dueD=p?.dueDate?new Date(p.dueDate):addDays(today(),90);
   const startBox=el("div");startBox.append(mkDateInput(startD.toISOString(),(d)=>{startD=d||startD;}));
   const dueBox=el("div");dueBox.append(mkDateInput(dueD.toISOString(),(d)=>{dueD=d||dueD;}));
-  m.append(fld("專案名稱 *",name));
-  const r=el("div","f2");r.append(fld("客戶",cust),fld("PM",pm));m.append(r);
+  m.append(fld("專案名稱 ✱（必填）",name));
+  const r=el("div","f2");r.append(fld("客戶",cust),fld("PM ✱（必填）",pmField));m.append(r);
   const r2=el("div","f2");r2.append(fld("專案開始日",startBox),fld("驗收日（結束）",dueBox));m.append(r2);
   if(isNew) m.append(el("div","gphase","建立後自動套用 13 步驟標準流程，並依開始～驗收日分配時程。"));
   const bar=el("div","row");bar.style.marginTop="16px";
   const saveB=el("button","btn",isNew?"建立專案":"儲存");
   saveB.onclick=()=>{
-    if(!name.value.trim()){name.focus();return;}
+    if(!name.value.trim()){ alert("請填寫專案名稱。"); name.focus(); return; }
+    if(!getPm()){ alert("請選擇/填寫 PM（必填）。"); pmField.focus(); return; }
     const s=startD||today(), du=dueD||addDays(s,90);
     if(isNew){
-      DB.projects.push({id:uid(),name:name.value.trim(),customer:cust.value.trim(),pm:pm.value.trim(),
+      DB.projects.push({id:uid(),name:name.value.trim(),customer:cust.value.trim(),pm:getPm(),
         startDate:s.toISOString(),dueDate:du.toISOString(),steps:buildSteps(s,du),meetings:[],expenses:[],shipments:[]});
     }else{
-      p.name=name.value.trim();p.customer=cust.value.trim();p.pm=pm.value.trim();
+      p.name=name.value.trim();p.customer=cust.value.trim();p.pm=getPm();
       p.startDate=s.toISOString();p.dueDate=du.toISOString();
     }
     save();closeModal();
