@@ -288,7 +288,7 @@ const CFGKEY="husu_cfg";
 let DB = load();
 // 雲端狀態
 const cloud = { on:false, sb:null, user:null };
-let ME = { role:"主管", name:"本機使用者", email:"" };  // 本機模式預設全權
+let ME = { role:"admin", name:"本機使用者", email:"" };  // 本機模式預設全權
 function load(){
   const raw=localStorage.getItem(KEY);
   if(raw) try{return JSON.parse(raw);}catch(e){}
@@ -307,10 +307,10 @@ function getCfg(){
 function setCfg(url,anonKey){ localStorage.setItem(CFGKEY,JSON.stringify({url:url.trim(),anonKey:anonKey.trim()})); }
 // 權限
 const canEdit  =()=>ME.role!=="檢視者";
-const canDelete=()=>["主管","PM"].includes(ME.role);
-const canProj  =()=>["主管","PM"].includes(ME.role);      // 建立專案
-const canManage=()=>ME.role==="主管";
-const costVisible=()=>["主管","PM"].includes(ME.role);   // 成本毛利僅主管/PM可見
+const canDelete=()=>["admin","PM"].includes(ME.role);
+const canProj  =()=>["admin","PM"].includes(ME.role);      // 建立專案
+const canManage=()=>ME.role==="admin";
+const costVisible=()=>["admin","PM"].includes(ME.role);   // 成本毛利僅 admin/PM 可見
 function applyPerm(){
   document.body.classList.toggle("ro", !canEdit());
   document.body.classList.toggle("nodel", !canDelete());
@@ -462,7 +462,7 @@ async function boot(){
   if(session){ await enterCloud(session); } else { screenLogin(); }
 }
 function startLocal(note){
-  cloud.on=false; ME={role:"主管",name:"本機使用者",email:""};
+  cloud.on=false; ME={role:"admin",name:"本機使用者",email:""};
   $("#footMode").textContent="本機試用模式（未連雲端）";
   $("#userchip").style.display="none";
   hideAuth(); render();
@@ -486,7 +486,7 @@ function screenLogin(){
 }
 function screenSignup(){
   showAuth(`<div class="logo2">W</div><h2>註冊帳號</h2>
-    <div class="gphase">第一位註冊者將自動成為「主管」。</div>
+    <div class="gphase">第一位註冊者自動成為 admin，其餘預設為 PM。</div>
     <div class="field"><label>姓名</label><input class="allow" id="aName" placeholder="你的名字"></div>
     <div class="field"><label>Email</label><input class="allow" id="aEmail" type="email" placeholder="you@company.com"></div>
     <div class="field"><label>密碼（至少 6 碼）</label><input class="allow" id="aPass" type="password"></div>
@@ -532,7 +532,7 @@ async function doSignup(){
 async function ensureProfile(user, name){
   const { data:existing } = await cloud.sb.from("profiles").select("*").eq("id",user.id).maybeSingle();
   if(existing) return existing;
-  // 角色由資料庫觸發器決定（第一人=主管，其餘=檢視者）；這裡帶預設值即可
+  // 角色由資料庫觸發器決定（第一人=admin，其餘=PM）；這裡帶預設值即可
   const row={ id:user.id, email:user.email, name:name||user.email.split("@")[0], role:"檢視者" };
   await cloud.sb.from("profiles").insert(row);
   const { data:created } = await cloud.sb.from("profiles").select("*").eq("id",user.id).maybeSingle();
@@ -552,11 +552,11 @@ async function enterCloud(session){
   render();
 }
 
-/* ============ 成員管理（主管） ============ */
+/* ============ 成員管理（admin） ============ */
 async function renderMembers(){
   const app=$("#app");app.innerHTML="";
   app.append(el("h2",null,"成員管理"));
-  app.append(el("div","page-sub","指派每位成員的角色。主管＝全權；PM＝可建立/編輯專案；成員＝一般編輯；檢視者＝唯讀。"));
+  app.append(el("div","page-sub","指派每位成員的角色。admin＝全權；PM＝可建立/編輯專案；成員＝一般編輯；檢視者＝唯讀。"));
   if(!cloud.on){ app.append(el("div","robar","此功能需在雲端模式下使用。")); return; }
   const c=el("div","card");
   const { data:rows, error } = await cloud.sb.from("profiles").select("*").order("role");
@@ -565,7 +565,7 @@ async function renderMembers(){
   const bd=el("tbody");
   (rows||[]).forEach(r=>{
     const tr=el("tr");
-    const sel=el("select","allow");["主管","PM","成員","檢視者"].forEach(o=>{const op=el("option",null,o);if(o===r.role)op.selected=true;sel.append(op);});
+    const sel=el("select","allow");["admin","PM","成員","檢視者"].forEach(o=>{const op=el("option",null,o);if(o===r.role)op.selected=true;sel.append(op);});
     sel.onchange=async()=>{ await cloud.sb.from("profiles").update({role:sel.value}).eq("id",r.id);
       if(r.id===cloud.user.id){ ME.role=sel.value; $("#uRole").textContent=sel.value; applyPerm(); } };
     const td=el("td");td.append(sel);
