@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCRM｜專案暨報修管理系統</title>
+<style>
+  :root{
+    --tiffany:#0ABAB5; --tiffany-d:#089c98; --tiffany-l:#7fded9; --tiffany-bg:#e9f8f7;
+    --ink:#213041; --muted:#6b7c8c; --line:#e2eaef; --bg:#f4f8f9; --card:#ffffff;
+    --green:#2fae66; --amber:#f0a92b; --red:#e5533c; --grey:#9aa8b4;
+    --shadow:0 1px 3px rgba(20,50,60,.06),0 6px 20px rgba(20,50,60,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+    color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5}
+  header{background:linear-gradient(100deg,var(--tiffany),var(--tiffany-d));color:#fff;
+    padding:14px 22px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow)}
+  header .logo{width:34px;height:34px;border-radius:9px;background:#fff;color:var(--tiffany);
+    display:grid;place-items:center;font-weight:800;font-size:18px}
+  header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.5px}
+  header .sub{font-size:12px;opacity:.85;margin-left:2px}
+  nav{display:flex;gap:4px;background:#fff;padding:0 18px;border-bottom:1px solid var(--line);
+    position:sticky;top:0;z-index:20}
+  nav button{border:0;background:none;padding:13px 16px;font-size:14px;color:var(--muted);
+    cursor:pointer;border-bottom:3px solid transparent;font-family:inherit;font-weight:600}
+  nav button.active{color:var(--tiffany-d);border-bottom-color:var(--tiffany)}
+  main{padding:22px;max-width:1240px;margin:0 auto}
+  h2{font-size:18px;margin:0 0 4px}
+  .page-sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);padding:18px;margin-bottom:18px}
+  .grid{display:grid;gap:14px}
+  .kpis{grid-template-columns:repeat(4,1fr)}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .kpi .n{font-size:30px;font-weight:800;line-height:1.1}
+  .kpi .l{color:var(--muted);font-size:13px;margin-top:4px}
+  .kpi.g .n{color:var(--green)} .kpi.a .n{color:var(--amber)} .kpi.r .n{color:var(--red)} .kpi.t .n{color:var(--tiffany-d)}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .between{justify-content:space-between}
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .s-green{background:#e7f6ee;color:#1c7a45} .s-green .dot{background:var(--green)}
+  .s-amber{background:#fdf1dc;color:#9a6a10} .s-amber .dot{background:var(--amber)}
+  .s-red{background:#fce8e4;color:#a8331f} .s-red .dot{background:var(--red)}
+  .s-grey{background:#eef2f5;color:#5a6b78} .s-grey .dot{background:var(--grey)}
+  .s-tiff{background:var(--tiffany-bg);color:var(--tiffany-d)} .s-tiff .dot{background:var(--tiffany)}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
+  th{color:var(--muted);font-weight:600;font-size:12px;background:#fafcfd}
+  tr.clk{cursor:pointer} tr.clk:hover{background:var(--tiffany-bg)}
+  button.btn{background:var(--tiffany);color:#fff;border:0;padding:9px 16px;border-radius:9px;
+    font-weight:600;cursor:pointer;font-family:inherit;font-size:13px}
+  button.btn:hover{background:var(--tiffany-d)}
+  button.ghost{background:#fff;color:var(--tiffany-d);border:1px solid var(--tiffany-l)}
+  button.mini{padding:5px 10px;font-size:12px;border-radius:7px}
+  input,select,textarea{font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);
+    border-radius:8px;background:#fff;color:var(--ink);width:100%}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--tiffany-l);border-color:var(--tiffany)}
+  label{font-size:12px;color:var(--muted);display:block;margin:0 0 4px}
+  .field{margin-bottom:12px}
+  .f2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  /* gantt */
+  .gantt{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+  .gtable{border-collapse:collapse;min-width:900px}
+  .gtable td,.gtable th{border-bottom:1px solid #eef3f6;padding:0}
+  .glabel{padding:8px 12px;font-size:13px;white-space:nowrap;border-right:1px solid var(--line);position:sticky;left:0;background:#fff;z-index:2}
+  .gphase{font-size:11px;color:var(--muted)}
+  .gtrack{position:relative;height:38px}
+  .gmonth{font-size:11px;color:var(--muted);text-align:center;border-right:1px dashed #eef3f6;padding:6px 0}
+  .bar{position:absolute;height:14px;border-radius:7px;top:7px}
+  .bar.plan{background:var(--tiffany-bg);border:1px solid var(--tiffany-l);top:6px;height:16px}
+  .bar.actual{background:var(--tiffany);top:9px;height:10px}
+  .bar.late{background:var(--red)}
+  .today{position:absolute;top:0;bottom:0;width:2px;background:var(--red);opacity:.6;z-index:3}
+  .modal-bg{position:fixed;inset:0;background:rgba(20,45,55,.45);display:none;z-index:50;padding:30px;overflow:auto}
+  .modal-bg.on{display:block}
+  .modal{background:#fff;max-width:960px;margin:0 auto;border-radius:16px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+  .modal table input,.modal table select{padding:6px 7px;font-size:12px}
+  .modal h3{margin:0 0 2px;font-size:18px}
+  .x{float:right;cursor:pointer;color:var(--muted);font-size:22px;line-height:1;border:0;background:none}
+  .steplist{margin-top:8px}
+  .step{display:grid;grid-template-columns:20px 30px 1fr 92px 40px;gap:8px;align-items:start;
+    padding:9px 6px;border-bottom:1px solid var(--line);background:#fff}
+  .step select{margin-top:2px}
+  .grip{cursor:grab;color:#c2cdd6;font-size:15px;text-align:center;user-select:none;line-height:1}
+  .grip:active{cursor:grabbing}
+  .step:hover .grip{color:var(--tiffany)}
+  .step.dragging{opacity:.4}
+  .step.dropbefore{box-shadow:inset 0 3px 0 var(--tiffany)}
+  .step.dropafter{box-shadow:inset 0 -3px 0 var(--tiffany)}
+  .step .no{min-width:24px;width:auto;height:24px;padding:0 6px;border-radius:12px;background:var(--tiffany-bg);
+    color:var(--tiffany-d);display:inline-grid;place-items:center;font-size:12px;font-weight:700}
+  .step.sub{background:#fbfdfd}
+  .step.sub .no{background:#eef2f5;color:#5a6b78;font-size:11px}
+  .step.sub .sinfo{padding-left:14px;border-left:2px solid var(--tiffany-l);margin-left:2px}
+  .ctrls{display:flex;gap:3px;justify-content:flex-end}
+  .ib{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:6px;width:22px;height:24px;
+    cursor:pointer;font-size:12px;line-height:1;padding:0}
+  .ib:hover{border-color:var(--tiffany);color:var(--tiffany-d);background:var(--tiffany-bg)}
+  .ib:disabled{opacity:.3;cursor:default}
+  .ib.rm:hover{border-color:var(--red);color:#a8331f;background:#fce8e4}
+  .edt{border:1px dashed transparent;border-radius:5px;padding:1px 3px;cursor:text}
+  .edt:hover{border-color:var(--tiffany-l);background:var(--tiffany-bg)}
+  .step .no{width:24px;height:24px;border-radius:50%;background:var(--tiffany-bg);color:var(--tiffany-d);
+    display:grid;place-items:center;font-size:12px;font-weight:700}
+  .step small{color:var(--muted)}
+  .tag{font-size:11px;padding:2px 7px;border-radius:5px;background:var(--tiffany-bg);color:var(--tiffany-d);margin-left:6px}
+  .empty{color:var(--muted);text-align:center;padding:30px}
+  .sub-tabs{display:flex;gap:6px;margin:14px 0}
+  .sub-tabs button{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 14px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit}
+  .sub-tabs button.on{background:var(--tiffany);color:#fff;border-color:var(--tiffany)}
+  .actitem{display:grid;grid-template-columns:24px 1fr 120px 110px;gap:8px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .hide{display:none}
+  .foot{color:var(--muted);font-size:12px;text-align:center;padding:24px}
+  .legend{font-size:12px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
+  .legend i{width:22px;height:10px;border-radius:5px;display:inline-block;vertical-align:middle;margin-right:5px}
+  /* 登入 / 設定 覆蓋層 */
+  .auth{position:fixed;inset:0;background:linear-gradient(135deg,#e9f8f7,#f4f8f9);display:none;place-items:center;z-index:80;padding:20px}
+  .auth.on{display:grid}
+  .authcard{background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(20,50,60,.18);padding:30px;width:100%;max-width:400px}
+  .authcard h2{margin:0 0 4px;color:var(--tiffany-d)}
+  .authcard .logo2{width:44px;height:44px;border-radius:12px;background:var(--tiffany);color:#fff;display:grid;place-items:center;font-weight:800;font-size:22px;margin-bottom:12px}
+  .authcard .field{margin:12px 0}
+  .authcard .btn{width:100%;padding:11px;margin-top:6px}
+  .authmsg{font-size:13px;margin-top:10px;min-height:18px}
+  .authmsg.err{color:var(--red)} .authmsg.ok{color:var(--green)}
+  .authlink{color:var(--tiffany-d);cursor:pointer;font-size:13px;text-decoration:underline;background:none;border:0;padding:0}
+  .userchip{margin-left:auto;display:flex;align-items:center;gap:10px;color:#fff;font-size:13px}
+  .userchip .rb{background:rgba(255,255,255,.2);padding:2px 9px;border-radius:20px;font-size:12px}
+  .userchip button{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:7px;padding:5px 10px;cursor:pointer;font-size:12px}
+  .userchip button:hover{background:rgba(255,255,255,.28)}
+  /* 唯讀 / 權限 */
+  body.ro input:not(.allow),body.ro select:not(.allow),body.ro textarea,body.ro [contenteditable]{pointer-events:none;opacity:.9;background:#f7f9fa}
+  body.ro .grip,body.ro .ib,body.ro .del,body.ro .btn.needEdit,body.ro .sub-tabs .addonly{display:none!important}
+  body.nodel .del,body.nodel .ib.rm{display:none!important}
+  .robar{background:#fff6e5;border:1px solid #f0d79a;color:#8a6410;border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:14px}
+  .cloudtag{font-size:11px;padding:2px 8px;border-radius:20px;margin-left:8px}
+  .cloudtag.on{background:#e7f6ee;color:#1c7a45} .cloudtag.off{background:#eef2f5;color:#5a6b78}
+  /* 統計圖 */
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.charts{grid-template-columns:1fr}}
+  .chartcard{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .chartcard h4{margin:0 0 12px;font-size:14px;color:var(--ink)}
+  .hbar{display:grid;grid-template-columns:96px 1fr 42px;align-items:center;gap:10px;margin:8px 0;font-size:13px}
+  .hbar .track{background:#eef3f6;border-radius:6px;height:16px;overflow:hidden}
+  .hbar .fill{height:16px;border-radius:6px;min-width:2px}
+  .hbar .v{text-align:right;font-weight:700;color:var(--ink)}
+  .cols{display:flex;align-items:flex-end;gap:10px;height:130px;padding-top:8px}
+  .colwrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;height:100%}
+  .col{width:66%;max-width:34px;background:var(--tiffany);border-radius:6px 6px 0 0;min-height:2px;transition:height .3s}
+  .colwrap small{color:var(--muted);font-size:11px}
+  .colv{font-size:12px;font-weight:700}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+  <div class="logo">W</div>
+  <div>
+    <h1>WCRM 專案暨報修管理系統 <span class="sub">水處理 AI 導入</span></h1>
+  </div>
+  <div class="userchip" id="userchip" style="display:none">
+    <span id="uName"></span><span class="rb" id="uRole"></span>
+    <button id="logoutBtn">登出</button>
+  </div>
+</header>
+<nav id="nav">
+  <button data-tab="dash" class="active">儀表板</button>
+  <button data-tab="proj">專案追蹤</button>
+  <button data-tab="tick">報修工單</button>
+  <button data-tab="members" id="navMembers" style="display:none">成員管理</button>
+  <button data-tab="data">資料 / 設定</button>
+</nav>
+<main id="app"></main>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalBox"></div></div>
+
+<!-- 登入 / 設定 覆蓋層 -->
+<div class="auth" id="authOverlay"><div class="authcard" id="authCard"></div></div>
+
+<div class="foot">WCRM｜專案暨報修管理系統　·　Tiffany #0ABAB5　·　<span id="footMode">本機試用模式</span></div>
+
+<script>
+/* ============ 資料模型 ============ */
+const PHASES = ["前置階段","啟動階段","規劃階段","安裝部署階段","AI訓練階段","結案階段"];
+const TEMPLATE = [
+  {no:1, phase:"前置階段", name:"調研及需求收斂", owner:"業務", days:7, docs:["調研表"]},
+  {no:2, phase:"前置階段", name:"方案擬定及報價", owner:"業務/Presale", days:10, docs:["服務建議書","報價單"]},
+  {no:3, phase:"啟動階段", name:"成立專案團隊", owner:"業務/PM", days:5, docs:["雲端共享資料夾"]},
+  {no:4, phase:"啟動階段", name:"業務及 Presale 交接", owner:"業務/PM/場務", days:5, docs:["專案 PTSC"]},
+  {no:5, phase:"規劃階段", name:"客戶現況訪談", owner:"PM/業務", days:7, docs:["現況訪談問卷(客戶簽回)","點位表確認文件(客戶簽回)"], sign:true},
+  {no:6, phase:"規劃階段", name:"專案啟動會議", owner:"PM/業務", days:3, docs:["結案目標(簽回)","專案三表","甘特圖"], sign:true},
+  {no:7, phase:"安裝部署階段", name:"感測器、設備進場及安裝", owner:"PM/場務/協力廠商", days:14, docs:["施工照片","驗收單(客戶簽回)"], sign:true},
+  {no:8, phase:"安裝部署階段", name:"訊號串接部署", owner:"PM/場務/協力廠商", days:10, docs:["測試報告","Table Schema","感測器位置合理性確認"]},
+  {no:9, phase:"AI訓練階段", name:"AI 模型訓練", owner:"AI小組/PM", days:14, docs:["需求模型"]},
+  {no:10, phase:"AI訓練階段", name:"控制邏輯開發", owner:"AI小組/PM", days:14, docs:["控制程式"]},
+  {no:11, phase:"AI訓練階段", name:"效能調校及試車", owner:"AI小組/PM/場務", days:14, docs:["調校後模型","測試報告"]},
+  {no:12, phase:"結案階段", name:"結案報告製作", owner:"AI小組/PM", days:7, docs:["結案報告"]},
+  {no:13, phase:"結案階段", name:"結案報告提報", owner:"PM/AI小組/業務", days:3, docs:["發票","教育訓練手冊"]},
+];
+const STEP_STATUS = ["未開始","進行中","待客戶簽回","已完成"];
+const SEVERITY = {"緊急":4,"高":8,"一般":24,"低":72}; // SLA 小時
+const TICKET_STATUS = ["新建","受理","處理中","待客戶確認","已結案"];
+const CATEGORY = ["硬體/感測器","訊號/串接","AI模型/控制邏輯","現場/其他"];
+
+/* ============ 工具 ============ */
+const $ = s=>document.querySelector(s);
+const el = (t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const fmt = d=> d? new Date(d).toLocaleDateString('zh-TW',{month:'2-digit',day:'2-digit',timeZone:'UTC'}):"—";
+const today = ()=>{const n=new Date();return new Date(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate()));};
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+const dayDiff=(a,b)=>Math.round((new Date(a)-new Date(b))/86400000);
+const uid=()=>Math.random().toString(36).slice(2,8);
+const ymd=d=>{const x=new Date(d);return ""+x.getFullYear()+String(x.getMonth()+1).padStart(2,'0')+String(x.getDate()).padStart(2,'0');};
+// 解析手動輸入的日期：接受 2025-11-07 / 2025/11/07 / 20251107
+function parseDate(str){
+  str=(str||'').trim().replace(/[.\/]/g,'-');
+  if(/^\d{8}$/.test(str)) str=str.slice(0,4)+'-'+str.slice(4,6)+'-'+str.slice(6,8);
+  const m=str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if(!m) return null;
+  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));   // UTC 零時，避免時區位移
+  return isNaN(d.getTime())?null:d;
+}
+// 可手動輸入 + 可用日曆選：文字欄 + 小日曆鈕
+function mkDateInput(iso, onset){
+  const wrap=document.createElement("span");
+  wrap.style.cssText="display:inline-flex;gap:4px;align-items:center;width:100%";
+  const txt=document.createElement("input");
+  txt.type="text"; txt.placeholder="YYYY-MM-DD"; txt.value=(iso||"").slice(0,10); txt.style.flex="1";
+  const pick=document.createElement("input");
+  pick.type="date"; pick.value=(iso||"").slice(0,10);
+  pick.style.cssText="width:30px;min-width:30px;padding:0 2px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;color:transparent";
+  pick.title="用日曆選擇";
+  txt.onchange=()=>{ const d=parseDate(txt.value); if(d){ txt.value=d.toISOString().slice(0,10); pick.value=txt.value; onset(d); }
+    else if(txt.value.trim()===""){ onset(null); }
+    else { txt.value=(iso||"").slice(0,10); alert("日期格式請用 YYYY-MM-DD，例如 2025-11-07"); } };
+  pick.onchange=()=>{ if(pick.value){ txt.value=pick.value; onset(parseDate(pick.value)); } };
+  wrap.append(txt,pick); return wrap;
+}
+// 依模板天數權重，把 13 步驟平均分配到 開始→驗收 的時間窗內
+function buildSteps(start,due){
+  const total=TEMPLATE.reduce((a,t)=>a+t.days,0);
+  const win=Math.max(TEMPLATE.length, dayDiff(due,start));
+  let acc=0;
+  return TEMPLATE.map(t=>{
+    const ps=addDays(start, Math.round(acc/total*win));
+    acc+=t.days;
+    let pe=addDays(start, Math.round(acc/total*win)-1);
+    if(pe<ps)pe=new Date(ps);
+    return {id:uid(),no:t.no,phase:t.phase,name:t.name,owner:t.owner,docs:t.docs.slice(),sign:!!t.sign,
+      planStart:ps.toISOString(),planEnd:pe.toISOString(),actualStart:null,actualEnd:null,status:"未開始"};
+  });
+}
+// 保留狀態，只重算計畫時程（新的開始/驗收日）
+function redistribute(p){
+  const fresh=buildSteps(new Date(p.startDate),new Date(p.dueDate));
+  p.steps.forEach((s,i)=>{ if(fresh[i]){s.planStart=fresh[i].planStart;s.planEnd=fresh[i].planEnd;} });
+  // 若步驟數與模板不同（有增刪），依序平均重排多出/不足的部分
+  if(p.steps.length!==fresh.length){
+    const start=new Date(p.startDate),due=new Date(p.dueDate);
+    const win=Math.max(p.steps.length, dayDiff(due,start));
+    const seg=win/p.steps.length;
+    p.steps.forEach((s,i)=>{ s.planStart=addDays(start,Math.round(i*seg)).toISOString();
+      s.planEnd=addDays(start,Math.round((i+1)*seg)-1).toISOString(); });
+  }
+}
+function genTicketNo(dateStr){
+  const same=DB.tickets.filter(t=>t.no&&t.no.includes(dateStr)).length;
+  return "RMA-"+dateStr+"-"+String(same+1).padStart(3,'0');
+}
+// 依 sub 旗標計算階層編號：主步驟 1,2,3…；子步驟 6.1,6.2,11.1…
+function numberSteps(steps){
+  let major=0,minor=0;
+  steps.forEach(s=>{
+    if(s.sub && major>0){ minor++; s.dispNo=major+"."+minor; }
+    else { major++; minor=0; s.sub=false; s.dispNo=""+major; }
+  });
+}
+
+/* ============ 設定（可在此直接填入，或啟動後於畫面貼上） ============ */
+const CONFIG = { url:"https://jjgiypahyaamexbvztaa.supabase.co", anonKey:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpqZ2l5cGFoeWFhbWV4YnZ6dGFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNjEzNTYsImV4cCI6MjEwMjczNzM1Nn0.ma8mlYVfcF86JIU3dxeo0DtTn8ziCcCRDYMsM_S914c" };   // 已內建 Supabase 連線（anon 公開金鑰）
+
+/* ============ 儲存 ============ */
+const KEY="husu_pm_v5";
+const CFGKEY="husu_cfg";
+let DB = load();
+// 雲端狀態
+const cloud = { on:false, sb:null, user:null };
+let ME = { role:"主管", name:"本機使用者", email:"" };  // 本機模式預設全權
+function load(){
+  const raw=localStorage.getItem(KEY);
+  if(raw) try{return JSON.parse(raw);}catch(e){}
+  return seed();
+}
+let syncTimer=null, selfWrite=false;
+function save(){
+  if(cloud.on){ clearTimeout(syncTimer); syncTimer=setTimeout(syncAll,450); }  // 雲端模式：資料只留記憶體+Supabase，不落地 localStorage
+  else localStorage.setItem(KEY,JSON.stringify(DB));                            // 本機模式：存本機
+}
+function getCfg(){
+  if(CONFIG.url&&CONFIG.anonKey) return {url:CONFIG.url,anonKey:CONFIG.anonKey};
+  try{const c=JSON.parse(localStorage.getItem(CFGKEY)||"null");if(c&&c.url&&c.anonKey)return c;}catch(e){}
+  return null;
+}
+function setCfg(url,anonKey){ localStorage.setItem(CFGKEY,JSON.stringify({url:url.trim(),anonKey:anonKey.trim()})); }
+// 權限
+const canEdit  =()=>ME.role!=="檢視者";
+const canDelete=()=>["主管","PM"].includes(ME.role);
+const canProj  =()=>["主管","PM"].includes(ME.role);      // 建立專案
+const canManage=()=>ME.role==="主管";
+const costVisible=()=>["主管","PM"].includes(ME.role);   // 成本毛利僅主管/PM可見
+function applyPerm(){
+  document.body.classList.toggle("ro", !canEdit());
+  document.body.classList.toggle("nodel", !canDelete());
+  $("#navMembers").style.display = canManage()&&cloud.on ? "" : "none";
+}
+
+/* ============ 雲端資料層 ============ */
+async function cloudLoad(){
+  const [{data:pr},{data:tk}] = await Promise.all([
+    cloud.sb.from("projects").select("data").order("updated_at",{ascending:true}),
+    cloud.sb.from("tickets").select("data").order("updated_at",{ascending:true})
+  ]);
+  DB = { projects:(pr||[]).map(r=>r.data), tickets:(tk||[]).map(r=>r.data) };
+}
+async function syncAll(){
+  if(!cloud.on) return;
+  selfWrite=true;
+  try{
+    const uid=cloud.user.id;
+    const proj=DB.projects.map(p=>({id:p.id,data:p,updated_by:uid,updated_at:new Date().toISOString()}));
+    const tick=DB.tickets.map(t=>({id:t.id,data:t,updated_by:uid,updated_at:new Date().toISOString()}));
+    if(proj.length) await cloud.sb.from("projects").upsert(proj);
+    if(tick.length) await cloud.sb.from("tickets").upsert(tick);
+    // 處理刪除：清掉雲端有、但本機已不存在的列
+    const [{data:sp},{data:st}]=await Promise.all([
+      cloud.sb.from("projects").select("id"), cloud.sb.from("tickets").select("id")]);
+    const lp=new Set(DB.projects.map(p=>p.id)), lt=new Set(DB.tickets.map(t=>t.id));
+    const dp=(sp||[]).filter(r=>!lp.has(r.id)).map(r=>r.id);
+    const dt=(st||[]).filter(r=>!lt.has(r.id)).map(r=>r.id);
+    if(dp.length) await cloud.sb.from("projects").delete().in("id",dp);
+    if(dt.length) await cloud.sb.from("tickets").delete().in("id",dt);
+  }catch(e){ console.error("同步失敗",e); }
+  setTimeout(()=>selfWrite=false,600);
+}
+function subscribeRealtime(){
+  cloud.sb.channel("husu-live")
+    .on("postgres_changes",{event:"*",schema:"public",table:"projects"},onRemote)
+    .on("postgres_changes",{event:"*",schema:"public",table:"tickets"},onRemote)
+    .subscribe();
+}
+async function onRemote(){
+  if(selfWrite) return;                        // 忽略自己造成的變更
+  if($("#modalBg").classList.contains("on")) return; // 有人正在編輯 modal，先不打斷
+  await cloudLoad(); render();
+}
+function seed(){
+  const mk=(name,customer,pm,startOffset,progressStep)=>{
+    const start=addDays(today(),startOffset);
+    const due=addDays(start,90); // 預設專案 3 個月（開始→驗收）
+    const steps=buildSteps(start,due);
+    steps.forEach((s,i)=>{
+      if(i<progressStep){s.status="已完成";s.actualStart=s.planStart;s.actualEnd=s.planEnd;}
+      else if(i===progressStep){s.status=s.sign?"待客戶簽回":"進行中";s.actualStart=s.planStart;}
+    });
+    return {id:uid(),name,customer,pm,startDate:start.toISOString(),dueDate:due.toISOString(),steps,
+      contractAmount:1200000, equipBudget:500000, opexBudget:300000,
+      shipments:[
+        {id:uid(),date:addDays(today(),startOffset+22).toISOString(),item:"DO 溶氧感測器（含變送器）",qty:2,note:"現場安裝"},
+        {id:uid(),date:addDays(today(),startOffset+22).toISOString(),item:"Modbus Gateway",qty:1,note:""}
+      ],
+      expenses:[
+        {id:uid(),date:addDays(today(),startOffset+8).toISOString(),category:"差旅費",amount:18600,note:"現勘往返高鐵＋住宿",by:pm},
+        {id:uid(),date:addDays(today(),startOffset+25).toISOString(),category:"設備",amount:277200,note:"感測器與 Gateway（含稅）",by:pm},
+        {id:uid(),date:addDays(today(),startOffset+30).toISOString(),category:"外包/協力",amount:126000,note:"訊號串接廠商（含稅）",by:pm},
+        {id:uid(),date:addDays(today(),startOffset+40).toISOString(),category:"雜費",amount:7400,note:"現場耗材、印刷",by:pm}
+      ],
+      meetings:[{id:uid(),date:addDays(today(),startOffset+20).toISOString(),title:"專案啟動會議",
+        decisions:["結案目標：氨氮去除率提升至 90% 以上","加藥量以下游端數值為基準"],
+        actions:[{id:uid(),item:"取得客戶 SCADA 對接窗口",owner:"PM",due:addDays(today(),3).toISOString(),done:false},
+                 {id:uid(),item:"協力廠商同步到場排程確認",owner:"場務",due:addDays(today(),-1).toISOString(),done:false}]}]};
+  };
+  const projects=[
+    mk("台南某廠 曝氣智能控制導入","台南水資源中心","王小明",-70,7),   // 進行中偏delay
+    mk("桃園某廠 加藥節藥系統","桃園工業區污水廠","陳大文",-30,3),     // 早期
+    mk("高雄某廠 混凝加藥優化","高雄某科技廠","林佳蓉",-140,13),      // 已結案
+  ];
+  // 讓第一案有一步延遲：把目前步驟 planEnd 拉到過去
+  const p0=projects[0]; const s=p0.steps[7]; s.planEnd=addDays(today(),-4).toISOString(); s.status="進行中";
+  const tickets=[
+    {id:uid(),no:null,title:"DO 感測器讀值飄移，加藥量異常偏高",projectId:projects[2].id,
+      device:"DO-01 溶氧感測器",category:"硬體/感測器",severity:"高",source:"客戶電話",
+      reportedAt:addDays(today(),-1).toISOString(),status:"處理中",assignee:"場務-阿凱",
+      handling:"研判為探頭結垢，安排現場清洗校正；若無改善則更換探頭。",closedAt:null,warranty:true},
+    {id:uid(),no:null,title:"控制邏輯於夜間流量低時過度加藥",projectId:projects[2].id,
+      device:"PAC 加藥泵",category:"AI模型/控制邏輯",severity:"一般",source:"客戶 LINE",
+      reportedAt:addDays(today(),-3).toISOString(),status:"待客戶確認",assignee:"AI小組-昱丞",
+      handling:"調整夜間時段控制參數下限，已部署，待客戶觀察兩日回饋。",closedAt:null,warranty:true},
+    {id:uid(),no:null,title:"SCADA 通訊中斷約 30 分鐘",projectId:projects[2].id,
+      device:"Modbus Gateway",category:"訊號/串接",severity:"緊急",source:"系統告警",
+      reportedAt:addDays(today(),-10).toISOString(),status:"已結案",assignee:"場務-阿凱",
+      handling:"現場 Gateway 電源模組更換，通訊恢復；加裝斷線自動重連。",closedAt:addDays(today(),-9).toISOString(),warranty:true},
+  ];
+  // 依回報日給流水號：RMA-yyyymmdd-NNN（同日重新計數）
+  const cnt={};
+  tickets.slice().sort((a,b)=>new Date(a.reportedAt)-new Date(b.reportedAt)).forEach(t=>{
+    const d=ymd(t.reportedAt);cnt[d]=(cnt[d]||0)+1;t.no="RMA-"+d+"-"+String(cnt[d]).padStart(3,'0');
+  });
+  return {projects,tickets};
+}
+
+/* ============ 狀態計算 ============ */
+function stepLate(s){
+  return s.status!=="已完成" && new Date(s.planEnd) < today();
+}
+function projHealth(p){
+  const done=p.steps.filter(s=>s.status==="已完成").length;
+  if(done===p.steps.length) return {k:"done",cls:"s-tiff",txt:"已結案"};
+  const dueOver=p.dueDate && new Date(p.dueDate) < today();
+  const late=p.steps.some(stepLate);
+  if(dueOver) return {k:"delay",cls:"s-red",txt:"逾驗收日"};
+  if(late) return {k:"delay",cls:"s-red",txt:"Delay"};
+  const soon=p.steps.some(s=>s.status!=="已完成" && dayDiff(s.planEnd,today())>=0 && dayDiff(s.planEnd,today())<=3);
+  const waitSign=p.steps.some(s=>s.status==="待客戶簽回");
+  if(soon||waitSign) return {k:"risk",cls:"s-amber",txt:"注意"};
+  return {k:"ok",cls:"s-green",txt:"On schedule"};
+}
+function projProgress(p){
+  return Math.round(p.steps.filter(s=>s.status==="已完成").length/p.steps.length*100);
+}
+function curStep(p){ return p.steps.find(s=>s.status!=="已完成"); }
+function ticketDue(t){ return addDays(t.reportedAt, 0), new Date(new Date(t.reportedAt).getTime()+SEVERITY[t.severity]*3600000); }
+function ticketOverdue(t){ return t.status!=="已結案" && ticketDue(t) < new Date(); }
+
+/* ============ 路由 ============ */
+let TAB="dash";
+document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{
+  TAB=b.dataset.tab;
+  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x===b));
+  render();
+});
+function render(){ applyPerm(); ({dash:renderDash,proj:renderProj,tick:renderTick,members:renderMembers,data:renderData}[TAB]||renderDash)(); }
+
+/* ============ 啟動 / 登入 / 設定 ============ */
+const AUTH=$("#authOverlay"), ACARD=$("#authCard");
+function showAuth(html){ ACARD.innerHTML=html; AUTH.classList.add("on"); }
+function hideAuth(){ AUTH.classList.remove("on"); }
+function msg(t,cls){ const m=$("#authMsg"); if(m){m.className="authmsg "+(cls||"");m.textContent=t;} }
+
+async function boot(){
+  const cfg=getCfg();
+  if(!cfg){ startLocal(); return; }                 // 沒設定 → 本機試用
+  if(typeof supabase==="undefined" || !supabase.createClient){
+    startLocal("無法載入雲端元件（可能是網路被擋），暫以本機模式開啟。"); return;
+  }
+  try{
+    cloud.sb = supabase.createClient(cfg.url, cfg.anonKey);
+  }catch(e){ startLocal("雲端設定有誤，暫以本機模式開啟。"); return; }
+  const { data:{ session } } = await cloud.sb.auth.getSession();
+  if(session){ await enterCloud(session); } else { screenLogin(); }
+}
+function startLocal(note){
+  cloud.on=false; ME={role:"主管",name:"本機使用者",email:""};
+  $("#footMode").textContent="本機試用模式（未連雲端）";
+  $("#userchip").style.display="none";
+  hideAuth(); render();
+  if(note) setTimeout(()=>alert(note),100);
+}
+function screenLogin(){
+  showAuth(`<div class="logo2">W</div><h2>登入</h2>
+    <div class="gphase">WCRM 專案暨報修管理系統</div>
+    <div class="field"><label>Email</label><input class="allow" id="aEmail" type="email" placeholder="you@company.com"></div>
+    <div class="field"><label>密碼</label><input class="allow" id="aPass" type="password" placeholder="密碼"></div>
+    <button class="btn" id="aLogin">登入</button>
+    <div class="authmsg" id="authMsg"></div>
+    <div style="margin-top:12px;display:flex;justify-content:space-between">
+      <button class="authlink" id="aToSignup">第一次使用？註冊帳號</button>
+      <button class="authlink" id="aToCfg">變更雲端設定</button>
+    </div>`);
+  $("#aLogin").onclick=doLogin;
+  $("#aPass").onkeydown=e=>{if(e.key==="Enter")doLogin();};
+  $("#aToSignup").onclick=screenSignup;
+  $("#aToCfg").onclick=screenConfig;
+}
+function screenSignup(){
+  showAuth(`<div class="logo2">W</div><h2>註冊帳號</h2>
+    <div class="gphase">第一位註冊者將自動成為「主管」。</div>
+    <div class="field"><label>姓名</label><input class="allow" id="aName" placeholder="你的名字"></div>
+    <div class="field"><label>Email</label><input class="allow" id="aEmail" type="email" placeholder="you@company.com"></div>
+    <div class="field"><label>密碼（至少 6 碼）</label><input class="allow" id="aPass" type="password"></div>
+    <button class="btn" id="aSignup">建立帳號</button>
+    <div class="authmsg" id="authMsg"></div>
+    <div style="margin-top:12px"><button class="authlink" id="aToLogin">已有帳號？回登入</button></div>`);
+  $("#aSignup").onclick=doSignup;
+  $("#aToLogin").onclick=screenLogin;
+}
+function screenConfig(){
+  const cfg=getCfg()||{url:"",anonKey:""};
+  showAuth(`<div class="logo2">W</div><h2>雲端設定</h2>
+    <div class="gphase">貼上你的 Supabase 專案資訊（建置指引另附）。留白並「以本機試用」可先單機使用。</div>
+    <div class="field"><label>Project URL</label><input class="allow" id="cUrl" placeholder="https://xxxx.supabase.co" value="${cfg.url}"></div>
+    <div class="field"><label>anon public key</label><input class="allow" id="cKey" placeholder="eyJhbGciOi..." value="${cfg.anonKey}"></div>
+    <button class="btn" id="cSave">儲存並連線</button>
+    <div class="authmsg" id="authMsg"></div>
+    <div style="margin-top:12px"><button class="authlink" id="cLocal">先以本機試用</button></div>`);
+  $("#cSave").onclick=()=>{
+    const u=$("#cUrl").value.trim(), k=$("#cKey").value.trim();
+    if(!u||!k){ msg("請兩欄都填。","err"); return; }
+    setCfg(u,k); boot();
+  };
+  $("#cLocal").onclick=()=>{ startLocal(); };
+}
+async function doLogin(){
+  const email=$("#aEmail").value.trim(), pass=$("#aPass").value;
+  msg("登入中…");
+  const { data, error } = await cloud.sb.auth.signInWithPassword({email,password:pass});
+  if(error){ msg("登入失敗："+error.message,"err"); return; }
+  await enterCloud(data.session);
+}
+async function doSignup(){
+  const name=$("#aName").value.trim(), email=$("#aEmail").value.trim(), pass=$("#aPass").value;
+  if(!email||pass.length<6){ msg("請填 Email 且密碼至少 6 碼。","err"); return; }
+  msg("建立中…");
+  const { data, error } = await cloud.sb.auth.signUp({email,password:pass});
+  if(error){ msg("註冊失敗："+error.message,"err"); return; }
+  if(!data.session){ msg("註冊成功，請至信箱收驗證信後再登入。","ok"); return; }
+  await ensureProfile(data.session.user, name);
+  await enterCloud(data.session);
+}
+async function ensureProfile(user, name){
+  const { data:existing } = await cloud.sb.from("profiles").select("*").eq("id",user.id).maybeSingle();
+  if(existing) return existing;
+  // 角色由資料庫觸發器決定（第一人=主管，其餘=檢視者）；這裡帶預設值即可
+  const row={ id:user.id, email:user.email, name:name||user.email.split("@")[0], role:"檢視者" };
+  await cloud.sb.from("profiles").insert(row);
+  const { data:created } = await cloud.sb.from("profiles").select("*").eq("id",user.id).maybeSingle();
+  return created || row;
+}
+async function enterCloud(session){
+  cloud.on=true; cloud.user=session.user;
+  let prof=await ensureProfile(session.user, "");
+  ME={ role:prof.role||"檢視者", name:prof.name||session.user.email, email:session.user.email };
+  $("#uName").textContent=ME.name; $("#uRole").textContent=ME.role;
+  $("#userchip").style.display=""; $("#footMode").textContent="雲端多人模式";
+  $("#logoutBtn").onclick=async()=>{ await cloud.sb.auth.signOut(); location.reload(); };
+  hideAuth();
+  try{localStorage.removeItem(KEY);}catch(e){}   // 清掉本機模式殘留的明文資料
+  await cloudLoad();
+  subscribeRealtime();
+  render();
+}
+
+/* ============ 成員管理（主管） ============ */
+async function renderMembers(){
+  const app=$("#app");app.innerHTML="";
+  app.append(el("h2",null,"成員管理"));
+  app.append(el("div","page-sub","指派每位成員的角色。主管＝全權；PM＝可建立/編輯專案；成員＝一般編輯；檢視者＝唯讀。"));
+  if(!cloud.on){ app.append(el("div","robar","此功能需在雲端模式下使用。")); return; }
+  const c=el("div","card");
+  const { data:rows, error } = await cloud.sb.from("profiles").select("*").order("role");
+  if(error){ c.append(el("div","empty","讀取失敗："+error.message)); app.append(c); return; }
+  const tb=el("table");tb.innerHTML="<thead><tr><th>姓名</th><th>Email</th><th>角色</th></tr></thead>";
+  const bd=el("tbody");
+  (rows||[]).forEach(r=>{
+    const tr=el("tr");
+    const sel=el("select","allow");["主管","PM","成員","檢視者"].forEach(o=>{const op=el("option",null,o);if(o===r.role)op.selected=true;sel.append(op);});
+    sel.onchange=async()=>{ await cloud.sb.from("profiles").update({role:sel.value}).eq("id",r.id);
+      if(r.id===cloud.user.id){ ME.role=sel.value; $("#uRole").textContent=sel.value; applyPerm(); } };
+    const td=el("td");td.append(sel);
+    tr.innerHTML=`<td><b>${r.name||"—"}</b></td><td>${r.email}</td>`;
+    tr.append(td);bd.append(tr);
+  });
+  tb.append(bd);c.append(tb);app.append(c);
+}
+
+/* ============ 儀表板 ============ */
+function renderDash(){
+  const ps=DB.projects;
+  const active=ps.filter(p=>projHealth(p).k!=="done");
+  const delay=ps.filter(p=>projHealth(p).k==="delay").length;
+  const risk=ps.filter(p=>projHealth(p).k==="risk").length;
+  const openT=DB.tickets.filter(t=>t.status!=="已結案");
+  const overdue=openT.filter(ticketOverdue).length;
+  const app=$("#app"); app.innerHTML="";
+  app.append(el("h2",null,"儀表板"));
+  app.append(el("div","page-sub","一眼掌握所有專案的排程健康度與待處理報修。"));
+  if(!canEdit()) app.append(el("div","robar",`你目前是「${ME.role}」角色，為唯讀檢視，無法修改資料。`));
+  const k=el("div","grid kpis");
+  k.append(kpi("t",active.length,"進行中專案"),kpi("r",delay,"Delay 專案"),
+    kpi("a",risk,"需注意專案"),kpi("r",overdue,"逾期報修(SLA)"));
+  app.append(k);
+
+  // 專案健康度表
+  const c1=el("div","card");
+  c1.append(el("div","row between",'<b>專案排程健康度</b>'));
+  const tb=el("table"); tb.innerHTML="<thead><tr><th>狀態</th><th>專案</th><th>客戶</th><th>PM</th><th>目前階段</th><th>進度</th><th>下一交付日</th><th>驗收日</th></tr></thead>";
+  const bd=el("tbody");
+  ps.forEach(p=>{
+    numberSteps(p.steps);
+    const h=projHealth(p),cs=curStep(p);
+    const tr=el("tr","clk");
+    tr.onclick=()=>openProject(p.id);
+    tr.innerHTML=`<td><span class="badge ${h.cls}"><span class="dot"></span>${h.txt}</span></td>
+      <td><b>${p.name}</b></td><td>${p.customer}</td><td>${p.pm}</td>
+      <td>${cs?`<span class="gphase">${cs.phase}</span><br>${cs.dispNo} ${cs.name}`:'—'}</td>
+      <td>${bar(projProgress(p))}</td>
+      <td>${cs?fmt(cs.planEnd)+(stepLate(cs)?` <span class="badge s-red" style="padding:1px 7px">逾 ${-dayDiff(cs.planEnd,today())} 天</span>`:''):'已完成'}</td>
+      <td>${p.dueDate?fmt(p.dueDate)+(new Date(p.dueDate)<today()&&projHealth(p).k!=='done'?' <span class="badge s-red" style="padding:1px 7px">逾期</span>':''):'—'}</td>`;
+    bd.append(tr);
+  });
+  tb.append(bd); c1.append(tb); app.append(c1);
+
+  // 最新報修
+  const c2=el("div","card");
+  c2.append(el("div","row between",'<b>待處理報修</b>'));
+  if(openT.length===0) c2.append(el("div","empty","目前沒有待處理報修 🎉"));
+  else{
+    const tb2=el("table");tb2.innerHTML="<thead><tr><th>單號</th><th>主旨</th><th>分級</th><th>狀態</th><th>SLA</th></tr></thead>";
+    const bd2=el("tbody");
+    openT.forEach(t=>{
+      const tr=el("tr","clk"); tr.onclick=()=>openTicket(t.id);
+      tr.innerHTML=`<td>${t.no}</td><td>${t.title}</td><td>${sevBadge(t.severity)}</td>
+        <td><span class="badge s-grey"><span class="dot"></span>${t.status}</span></td>
+        <td>${ticketOverdue(t)?'<span class="badge s-red"><span class="dot"></span>已逾期</span>':fmt(ticketDue(t))+' 前'}</td>`;
+      bd2.append(tr);
+    });
+    tb2.append(bd2);c2.append(tb2);
+  }
+  app.append(c2);
+}
+function kpi(cls,n,l){return el("div","kpi "+cls,`<div class="n">${n}</div><div class="l">${l}</div>`);}
+function bar(pct){return `<div style="background:#eef3f6;border-radius:6px;height:8px;width:120px;display:inline-block;vertical-align:middle;overflow:hidden">
+  <div style="height:8px;width:${pct}%;background:var(--tiffany)"></div></div> <small>${pct}%</small>`;}
+function sevBadge(s){const cls=s==="緊急"?"s-red":s==="高"?"s-amber":s==="一般"?"s-tiff":"s-grey";
+  return `<span class="badge ${cls}"><span class="dot"></span>${s}</span>`;}
+
+/* ============ 專案列表 ============ */
+function renderProj(){
+  const app=$("#app");app.innerHTML="";
+  app.append(el("div","row between",'<h2>專案追蹤</h2>'));
+  if(canProj()){const addBtn=el("button","btn needEdit","＋ 新增專案");addBtn.onclick=()=>openProjectForm(null);
+  $("#app>.row.between").append(addBtn);}
+  app.append(el("div","page-sub","套用 13 步驟標準流程；點專案看甘特圖與待追蹤事項。"));
+  DB.projects.forEach(p=>{
+    const h=projHealth(p);
+    const c=el("div","card");
+    c.append(el("div","row between",
+      `<div><b style="font-size:15px">${p.name}</b> <span class="badge ${h.cls}"><span class="dot"></span>${h.txt}</span>
+       <div class="gphase" style="margin-top:3px">客戶：${p.customer}　·　PM：${p.pm}　·　進度 ${projProgress(p)}%${costVisible()?marginTag(p):''}</div></div>`));
+    c.append(ganttFor(p));
+    const open=el("button","btn ghost mini","展開明細 / 待追蹤 ▸");open.style.marginTop="10px";
+    open.onclick=()=>openProject(p.id);
+    c.append(open);
+    app.append(c);
+  });
+}
+function ganttFor(p){
+  numberSteps(p.steps);
+  const wrap=el("div","gantt");
+  const all=p.steps.flatMap(s=>[new Date(s.planStart),new Date(s.planEnd),s.actualEnd?new Date(s.actualEnd):null]).filter(Boolean);
+  let min=new Date(Math.min(...all)),max=new Date(Math.max(...all,today()));
+  min=addDays(min,-3);max=addDays(max,3);
+  const totalDays=dayDiff(max,min);
+  const pxPerDay=Math.max(2.4, Math.min(9, 820/totalDays));
+  const W=totalDays*pxPerDay;
+  const t=el("table","gtable");
+  // 月標頭
+  const thead=el("thead");const trh=el("tr");
+  trh.append(el("th","glabel","階段 / 步驟"));
+  const thTrack=el("th");thTrack.style.position="relative";
+  let months="";let cursor=new Date(min);
+  while(cursor<max){
+    const next=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);
+    const span=dayDiff(next<max?next:max,cursor)*pxPerDay;
+    months+=`<span style="display:inline-block;width:${span}px;" class="gmonth">${cursor.getFullYear()}/${String(cursor.getMonth()+1).padStart(2,'0')}</span>`;
+    cursor=next;
+  }
+  thTrack.innerHTML=`<div style="width:${W}px">${months}</div>`;
+  trh.append(thTrack);thead.append(trh);t.append(thead);
+  const tb=el("tbody");
+  p.steps.forEach(s=>{
+    const tr=el("tr");
+    const late=stepLate(s);
+    tr.append(el("td","glabel",`<span class="gphase">${s.phase}</span><br>${s.sub?'　　':''}<b>${s.dispNo}</b> ${s.name}${s.sign?'<span class="tag">需簽回</span>':''}`));
+    const td=el("td");
+    const track=el("div","gtrack");track.style.width=W+"px";
+    // plan bar
+    const pl=el("div","bar plan");
+    pl.style.left=dayDiff(s.planStart,min)*pxPerDay+"px";
+    pl.style.width=Math.max(6,dayDiff(s.planEnd,s.planStart)*pxPerDay)+"px";
+    pl.title=`計畫 ${fmt(s.planStart)} ~ ${fmt(s.planEnd)}`;
+    track.append(pl);
+    // actual/progress bar
+    if(s.actualStart){
+      const aEnd=s.actualEnd?new Date(s.actualEnd):today();
+      const ab=el("div","bar actual"+(late?" late":""));
+      ab.style.left=dayDiff(s.actualStart,min)*pxPerDay+"px";
+      ab.style.width=Math.max(6,dayDiff(aEnd,s.actualStart)*pxPerDay)+"px";
+      ab.title=`實際 ${fmt(s.actualStart)} ~ ${s.actualEnd?fmt(s.actualEnd):'進行中'}`;
+      track.append(ab);
+    }
+    // today line
+    const tl=el("div","today");tl.style.left=dayDiff(today(),min)*pxPerDay+"px";track.append(tl);
+    td.append(track);tr.append(td);tb.append(tr);
+  });
+  t.append(tb);wrap.append(t);
+  const lg=el("div","legend",`<span><i style="background:var(--tiffany-bg);border:1px solid var(--tiffany-l)"></i>計畫</span>
+    <span><i style="background:var(--tiffany)"></i>實際/進行</span>
+    <span><i style="background:var(--red)"></i>逾期</span>
+    <span><i style="background:var(--red);width:2px"></i>今日</span>`);
+  const box=el("div");box.append(wrap,lg);return box;
+}
+
+/* ============ 專案明細 modal ============ */
+let subTab="steps";
+function openProject(id){
+  const p=DB.projects.find(x=>x.id===id);subTab="steps";drawProject(p);openModal();
+}
+function drawProject(p){
+  const h=projHealth(p);
+  const m=$("#modalBox");m.innerHTML="";
+  m.append(el("button","x","×"));m.querySelector(".x").onclick=closeModal;
+  m.append(el("h3",null,`${p.name} <span class="badge ${h.cls}"><span class="dot"></span>${h.txt}</span>`));
+  m.append(el("div","gphase",`客戶：${p.customer}　·　PM：${p.pm}　·　進度 ${projProgress(p)}%`));
+  if(canProj()){
+    const eb=el("button","btn ghost mini","✎ 編輯專案資料 / 刪除");eb.style.marginTop="8px";
+    eb.onclick=()=>openProjectForm(p);
+    m.append(eb);
+  }
+  // 專案整體時程設定：開始日 / 驗收日
+  const setBox=el("div","card");setBox.style.cssText="box-shadow:none;background:#fafcfd;padding:12px 14px;margin:12px 0";
+  const startV=(p.startDate||p.steps[0]?.planStart||today().toISOString()).slice(0,10);
+  const dueV=(p.dueDate||p.steps[p.steps.length-1]?.planEnd||addDays(today(),90).toISOString()).slice(0,10);
+  const span=dayDiff(new Date(dueV),new Date(startV));
+  setBox.innerHTML=`<div class="f3">
+    <div><label>專案開始日</label><div id="pStartBox"></div></div>
+    <div><label>驗收日（結束）</label><div id="pDueBox"></div></div>
+    <div><label>總工期</label><div style="padding:8px 0"><b>${span} 天</b>（約 ${(span/30).toFixed(1)} 個月）</div></div>
+  </div>
+  <button class="btn ghost mini" id="reDist">↻ 依開始/驗收日 重新分配 13 步驟時程</button>
+  <span class="gphase" style="margin-left:8px">保留各步驟狀態，只重算計畫時程</span>`;
+  m.append(setBox);
+  setBox.querySelector("#pStartBox").append(mkDateInput(p.startDate||startV,(d)=>{ if(d){p.startDate=d.toISOString();save();drawProject(p);} }));
+  setBox.querySelector("#pDueBox").append(mkDateInput(p.dueDate||dueV,(d)=>{ if(d){p.dueDate=d.toISOString();save();drawProject(p);} }));
+  setBox.querySelector("#reDist").onclick=()=>{p.startDate=(parseDate(startV)||today()).toISOString();p.dueDate=(parseDate(dueV)||today()).toISOString();redistribute(p);save();drawProject(p);};
+  const st=el("div","sub-tabs");
+  const stTabs=[["steps","步驟 / 交付"],["gantt","甘特圖"],["meet","會議 / 決議 / 待追蹤"]];
+  if(costVisible()) stTabs.push(["cost","成本 / 毛利"]);
+  stTabs.forEach(([k,l])=>{
+    const b=el("button",subTab===k?"on":"",l);b.onclick=()=>{subTab=k;drawProject(p);};st.append(b);
+  });
+  m.append(st);
+  if(subTab==="steps"){
+    numberSteps(p.steps);
+    m.append(el("div","gphase",'名稱／產出文字可直接點改；拖曳左側 ⠿ 把手調整順序、» 設為子項(如 6.1)／« 升回主項、✕ 刪除；最下方可新增。'));
+    const list=el("div","steplist");
+    let dragIdx=null;
+    const clearMarks=()=>list.querySelectorAll(".step").forEach(x=>x.classList.remove("dropbefore","dropafter","dragging"));
+    p.steps.forEach((s,idx)=>{
+      const late=stepLate(s);
+      const r=el("div","step"+(s.sub?" sub":""));
+      // 拖曳把手
+      const grip=el("div","grip","⠿");grip.draggable=true;grip.title="拖曳調整順序";
+      grip.ondragstart=e=>{dragIdx=idx;e.dataTransfer.effectAllowed="move";try{e.dataTransfer.setData("text/plain",String(idx));}catch(_){}r.classList.add("dragging");};
+      grip.ondragend=()=>{dragIdx=null;clearMarks();};
+      r.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect="move";
+        const rect=r.getBoundingClientRect();const after=e.clientY>rect.top+rect.height/2;
+        list.querySelectorAll(".step").forEach(x=>x.classList.remove("dropbefore","dropafter"));
+        r.classList.add(after?"dropafter":"dropbefore");};
+      r.ondrop=e=>{e.preventDefault();if(dragIdx===null)return;
+        const rect=r.getBoundingClientRect();const after=e.clientY>rect.top+rect.height/2;
+        let to=idx+(after?1:0);const from=dragIdx;
+        const item=p.steps.splice(from,1)[0];if(from<to)to--;
+        p.steps.splice(Math.max(0,Math.min(p.steps.length,to)),0,item);
+        dragIdx=null;save();drawProject(p);};
+      r.append(grip);
+      r.append(el("div","no",s.dispNo));
+      // 可編輯名稱 + 產出文件
+      const info=el("div","sinfo");
+      const nm=el("b","edt",s.name);nm.contentEditable=true;
+      nm.onblur=()=>{s.name=nm.textContent.trim()||s.name;save();};
+      const line2=el("small");
+      const docsSpan=el("span","edt",s.docs.join('、')||'（無）');docsSpan.contentEditable=true;
+      docsSpan.onblur=()=>{s.docs=docsSpan.textContent.split(/[、,，]/).map(x=>x.trim()).filter(Boolean);save();};
+      line2.append(document.createTextNode(`負責：${s.owner}　·　產出：`),docsSpan);
+      info.append(nm);
+      if(s.sign)info.insertAdjacentHTML('beforeend','<span class="tag">需客戶簽回</span>');
+      if(late)info.insertAdjacentHTML('beforeend','<span class="badge s-red" style="margin-left:6px;padding:1px 7px">逾期</span>');
+      info.append(el("br"),line2);
+      // 計畫起訖日（皆可調整）
+      const planRow=el("small");planRow.style.cssText="display:flex;gap:5px;align-items:center;margin-top:4px;flex-wrap:wrap";
+      planRow.append(document.createTextNode("計畫"));
+      const ds=el("div");ds.style.cssText="width:150px;flex:none";ds.append(mkDateInput(s.planStart,(d)=>{ if(d){s.planStart=d.toISOString();} save();drawProject(p); }));
+      const de=el("div");de.style.cssText="width:150px;flex:none";de.append(mkDateInput(s.planEnd,(d)=>{ if(d){s.planEnd=d.toISOString();} save();drawProject(p); }));
+      planRow.append(ds,document.createTextNode("~"),de);
+      info.append(planRow);
+      r.append(info);
+      const sel=el("select");STEP_STATUS.forEach(o=>{const op=el("option",null,o);if(o===s.status)op.selected=true;sel.append(op);});
+      sel.onchange=()=>{s.status=sel.value;
+        if(s.status==="已完成"&&!s.actualEnd)s.actualEnd=today().toISOString();
+        if(s.status!=="已完成")s.actualEnd=null;
+        if(s.status!=="未開始"&&!s.actualStart)s.actualStart=today().toISOString();
+        save();drawProject(p);};
+      r.append(sel);
+      // 控制鈕：上移 / 下移 / 子項切換 / 刪除
+      const ctr=el("div","ctrls");
+      const sb=el("button","ib",s.sub?"«":"»");sb.title=s.sub?"升回主項":"設為子項(6.1)";
+      sb.disabled=idx===0;sb.onclick=()=>{s.sub=!s.sub;save();drawProject(p);};
+      const del=el("button","ib rm","✕");del.title="刪除";
+      del.onclick=()=>{if(confirm(`刪除步驟「${s.name}」？`)){p.steps.splice(idx,1);save();drawProject(p);}};
+      ctr.append(sb,del);r.append(ctr);
+      list.append(r);
+    });
+    m.append(list);
+    const addBox=el("div","card");addBox.style.cssText="box-shadow:none;background:var(--tiffany-bg);padding:10px 12px;margin-top:10px";
+    addBox.append(el("label",null,"新增步驟（填完按新增，不會跳窗）"));
+    const fr=el("div","f3");
+    const nName=el("input");nName.placeholder="步驟名稱";
+    const nOwner=el("input");nOwner.placeholder="負責人";
+    const nDocs=el("input");nDocs.placeholder="產出文件（用、分隔）";
+    fr.append(nName,nOwner,nDocs);addBox.append(fr);
+    const addBtn=el("button","btn mini","＋ 新增步驟");addBtn.style.marginTop="8px";
+    addBtn.onclick=()=>{ if(!nName.value.trim()){nName.focus();return;}
+      const prev=p.steps[p.steps.length-1];
+      const ps=prev?addDays(prev.planEnd,1):(p.startDate?new Date(p.startDate):today());
+      p.steps.push({id:uid(),phase:prev?prev.phase:"其他",name:nName.value.trim(),owner:nOwner.value.trim(),
+        docs:nDocs.value.split(/[、,，]/).map(x=>x.trim()).filter(Boolean),sign:false,sub:false,
+        planStart:ps.toISOString(),planEnd:addDays(ps,5).toISOString(),actualStart:null,actualEnd:null,status:"未開始"});
+      save();drawProject(p);
+    };
+    addBox.append(addBtn);m.append(addBox);
+  }
+  else if(subTab==="gantt"){ m.append(ganttFor(p)); }
+  else if(subTab==="cost"){ renderCostTab(m,p); }
+  else {
+    p.meetings.forEach(mt=>{
+      if(!mt.decisions)mt.decisions=[]; if(!mt.actions)mt.actions=[];
+      const c=el("div","card");c.style.boxShadow="none";c.style.background="#fafcfd";
+      // 標題(可改) + 日期 + 刪除
+      const hd=el("div","row between");
+      const tt=el("b","edt",mt.title);tt.contentEditable=true;tt.onblur=()=>{mt.title=tt.textContent.trim()||mt.title;save();};
+      const right=el("div","row");
+      const db=el("div");db.style.width="150px";db.append(mkDateInput(mt.date,(d)=>{mt.date=d?d.toISOString():mt.date;save();}));
+      const delM=el("button","ib rm","✕");delM.title="刪除會議";delM.onclick=()=>{if(confirm("刪除此會議記錄？")){p.meetings=p.meetings.filter(x=>x.id!==mt.id);save();drawProject(p);}};
+      right.append(db,delM);hd.append(tt,right);c.append(hd);
+      // 決議事項
+      c.append(el("label",null,"決議事項"));
+      mt.decisions.forEach((d,di)=>{
+        const r=el("div","row between");r.style.padding="2px 0";
+        r.append(el("div",null,"· "+d));
+        const x=el("button","ib rm","✕");x.onclick=()=>{mt.decisions.splice(di,1);save();drawProject(p);};
+        r.append(x);c.append(r);
+      });
+      const dRow=el("div","row");dRow.style.marginTop="4px";
+      const dIn=el("input");dIn.placeholder="新增決議事項";dIn.style.flex="1";
+      const dAdd=el("button","btn mini","＋");dAdd.onclick=()=>{if(!dIn.value.trim())return;mt.decisions.push(dIn.value.trim());save();drawProject(p);};
+      dRow.append(dIn,dAdd);c.append(dRow);
+      // 待追蹤事項
+      c.append(el("label",null,"待追蹤事項"));
+      mt.actions.forEach(a=>{
+        const overdue=!a.done && new Date(a.due)<today();
+        const r=el("div","row between");r.style.padding="4px 0";r.style.borderBottom="1px dashed var(--line)";
+        const left=el("div","row");
+        const cb=el("input");cb.type="checkbox";cb.checked=a.done;cb.style.width="auto";cb.onchange=()=>{a.done=cb.checked;save();drawProject(p);};
+        left.append(cb,el("span",null,`${a.item} <small class="gphase">（${a.owner}）</small>`));
+        const ra=el("div","row");
+        ra.append(el("span","gphase",(a.done?"✓ 已完成":`到期 ${fmt(a.due)}`)));
+        ra.append(el("span",null,overdue?'<span class="badge s-red" style="padding:1px 7px">逾期</span>':(a.done?'<span class="badge s-green" style="padding:1px 7px">結案</span>':'<span class="badge s-amber" style="padding:1px 7px">追蹤中</span>')));
+        const x=el("button","ib rm","✕");x.onclick=()=>{mt.actions=mt.actions.filter(z=>z.id!==a.id);save();drawProject(p);};
+        ra.append(x);r.append(left,ra);c.append(r);
+      });
+      const aBox=el("div","f3");aBox.style.marginTop="6px";
+      const aItem=el("input");aItem.placeholder="待追蹤事項";
+      const aOwner=el("input");aOwner.placeholder="負責人";
+      const aDueBox=el("div");let aDue=addDays(today(),3);aDueBox.append(mkDateInput(aDue.toISOString(),(d)=>{aDue=d||addDays(today(),3);}));
+      aBox.append(aItem,aOwner,aDueBox);c.append(aBox);
+      const aAdd=el("button","btn mini","＋ 新增待追蹤");aAdd.style.marginTop="6px";
+      aAdd.onclick=()=>{if(!aItem.value.trim()){aItem.focus();return;}mt.actions.push({id:uid(),item:aItem.value.trim(),owner:aOwner.value.trim(),due:(aDue||addDays(today(),3)).toISOString(),done:false});save();drawProject(p);};
+      c.append(aAdd);
+      m.append(c);
+    });
+    // 新增會議記錄（表單式）
+    const mBox=el("div","card");mBox.style.cssText="box-shadow:none;background:var(--tiffany-bg);padding:10px 12px";
+    mBox.append(el("label",null,"新增會議記錄"));
+    const mr=el("div","f2");
+    const mTitle=el("input");mTitle.placeholder="會議主題";
+    const mDateBox=el("div");let mDate=today();mDateBox.append(mkDateInput(today().toISOString(),(d)=>{mDate=d||today();}));
+    mr.append(mTitle,mDateBox);mBox.append(mr);
+    const mAdd=el("button","btn mini","＋ 新增會議");mAdd.style.marginTop="8px";
+    mAdd.onclick=()=>{p.meetings.push({id:uid(),date:(mDate||today()).toISOString(),title:mTitle.value.trim()||"會議",decisions:[],actions:[]});save();drawProject(p);};
+    mBox.append(mAdd);m.append(mBox);
+  }
+}
+const fld=(lb,inp)=>{const d=el("div","field");d.append(el("label",null,lb));d.append(inp);return d;};
+function openProjectForm(p){        // p 為 null=新增，否則=編輯
+  const isNew=!p;
+  const m=$("#modalBox");m.innerHTML="";
+  m.append(el("button","x","×"));m.querySelector(".x").onclick=closeModal;
+  m.append(el("h3",null,isNew?"新增專案":"編輯專案"));
+  const name=el("input");name.value=p?.name||"";
+  const cust=el("input");cust.value=p?.customer||"";
+  const pm=el("input");pm.value=p?.pm||"";
+  let startD=p?.startDate?new Date(p.startDate):today();
+  let dueD=p?.dueDate?new Date(p.dueDate):addDays(today(),90);
+  const startBox=el("div");startBox.append(mkDateInput(startD.toISOString(),(d)=>{startD=d||startD;}));
+  const dueBox=el("div");dueBox.append(mkDateInput(dueD.toISOString(),(d)=>{dueD=d||dueD;}));
+  m.append(fld("專案名稱 *",name));
+  const r=el("div","f2");r.append(fld("客戶",cust),fld("PM",pm));m.append(r);
+  const r2=el("div","f2");r2.append(fld("專案開始日",startBox),fld("驗收日（結束）",dueBox));m.append(r2);
+  if(isNew) m.append(el("div","gphase","建立後自動套用 13 步驟標準流程，並依開始～驗收日分配時程。"));
+  const bar=el("div","row");bar.style.marginTop="16px";
+  const saveB=el("button","btn",isNew?"建立專案":"儲存");
+  saveB.onclick=()=>{
+    if(!name.value.trim()){name.focus();return;}
+    const s=startD||today(), du=dueD||addDays(s,90);
+    if(isNew){
+      DB.projects.push({id:uid(),name:name.value.trim(),customer:cust.value.trim(),pm:pm.value.trim(),
+        startDate:s.toISOString(),dueDate:du.toISOString(),steps:buildSteps(s,du),meetings:[],expenses:[],shipments:[]});
+    }else{
+      p.name=name.value.trim();p.customer=cust.value.trim();p.pm=pm.value.trim();
+      p.startDate=s.toISOString();p.dueDate=du.toISOString();
+    }
+    save();closeModal();
+  };
+  const cancel=el("button","btn ghost","取消");cancel.onclick=closeModal;
+  bar.append(saveB,cancel);
+  if(!isNew && canDelete()){
+    const del=el("button","btn","刪除專案");del.style.cssText="background:var(--red);margin-left:auto";
+    del.onclick=()=>{if(confirm(`確定刪除專案「${p.name}」？此動作無法復原。`)){DB.projects=DB.projects.filter(x=>x.id!==p.id);save();closeModal();}};
+    bar.append(del);
+  }
+  m.append(bar);openModal();
+}
+
+/* ============ 成本 / 毛利（未稅，不含 5%） ============ */
+const TAX=1.05;
+const EXP_CATS=["設備","人力工時","差旅費","材料","外包/協力","雜費","其他"];
+const EQUIP_CATS=["設備"];                                    // 採購預算（設備）
+const OPEX_CATS=["人力工時","差旅費","材料","外包/協力","雜費","其他"]; // 其他費用（專案執行費）
+const EXP_COLOR=l=>({"設備":"#0ABAB5","人力工時":"#089c98","差旅費":"#f0a92b","材料":"#7fded9","外包/協力":"#7c6cc4","雜費":"#64748b","其他":"#9aa8b4"}[l]||"#64748b");
+const fmtM=n=>"NT$ "+Math.round(n||0).toLocaleString("en-US");
+const netOf=a=>(+a||0)/TAX;                                   // 由含稅實付換算未稅額
+function marginTag(p){
+  const c=projCost(p); if(c.margin==null) return '';
+  const cls=c.margin>=70?"s-green":(c.margin>=55?"s-amber":"s-red");
+  return `　·　<span class="badge ${cls}" style="padding:1px 8px">毛利率 ${c.margin.toFixed(2)}%</span>`;
+}
+function projCost(p){
+  const exps=p.expenses||[];
+  const spentGross=exps.reduce((a,e)=>a+(+e.amount||0),0);       // 含稅實付合計
+  const spentNet=exps.reduce((a,e)=>a+netOf(e.amount),0);        // 未稅支出合計
+  const revenue=+p.contractAmount||0;                            // 合約收入（未稅）
+  const equipBudget=+p.equipBudget||0, opexBudget=+p.opexBudget||0;
+  const equipSpentNet=exps.filter(e=>EQUIP_CATS.includes(e.category)).reduce((a,e)=>a+netOf(e.amount),0);
+  const opexSpentNet =exps.filter(e=>OPEX_CATS.includes(e.category)).reduce((a,e)=>a+netOf(e.amount),0);
+  const equipRemain=equipBudget-equipSpentNet, opexRemain=opexBudget-opexSpentNet;
+  const gross=revenue-spentNet;
+  const margin=revenue>0?(gross/revenue*100):null;               // 毛利率（未稅）
+  const byCatNet={};EXP_CATS.forEach(c=>byCatNet[c]=0);
+  exps.forEach(e=>{byCatNet[e.category]=(byCatNet[e.category]||0)+netOf(e.amount);});
+  return {spentGross,spentNet,revenue,equipBudget,opexBudget,equipSpentNet,opexSpentNet,equipRemain,opexRemain,gross,margin,byCatNet,exps};
+}
+function renderCostTab(m,p){
+  if(!p.expenses)p.expenses=[];
+  if(!p.shipments)p.shipments=[];
+  const c=projCost(p);
+  m.append(el("div","gphase","金額一律以「未稅（不含 5%）」計算毛利；支出請輸入實付含稅金額，系統自動換算未稅額。"));
+  // 設定：收入 + 兩個預算
+  const setBox=el("div","card");setBox.style.cssText="box-shadow:none;background:#fafcfd;padding:12px 14px;margin:12px 0";
+  setBox.innerHTML=`<div class="f3">
+    <div><label>合約金額（收入，未稅）</label><input type="number" id="cAmt" value="${p.contractAmount||''}" placeholder="例：1200000"></div>
+    <div><label>採購預算（設備，未稅）</label><input type="number" id="cEq" value="${p.equipBudget||''}" placeholder="例：500000"></div>
+    <div><label>其他費用預算（執行費，未稅）</label><input type="number" id="cOp" value="${p.opexBudget||''}" placeholder="例：300000"></div></div>`;
+  m.append(setBox);
+  setBox.querySelector("#cAmt").onchange=e=>{p.contractAmount=+e.target.value||0;save();drawProject(p);};
+  setBox.querySelector("#cEq").onchange=e=>{p.equipBudget=+e.target.value||0;save();drawProject(p);};
+  setBox.querySelector("#cOp").onchange=e=>{p.opexBudget=+e.target.value||0;save();drawProject(p);};
+  // KPI
+  const marginCls=c.margin==null?"t":(c.margin>=70?"g":(c.margin>=55?"a":"r"));
+  const k=el("div","grid kpis");k.style.gridTemplateColumns="repeat(3,1fr)";
+  k.append(kpi("t",fmtM(c.revenue),"合約收入（未稅）"),kpi("t",fmtM(c.spentNet),"未稅總支出"),
+    kpi(c.gross>=0?"g":"r",fmtM(c.gross),"毛利（未稅）"));
+  m.append(k);
+  const k2=el("div","grid kpis");k2.style.gridTemplateColumns="repeat(3,1fr)";
+  k2.append(kpi(marginCls,c.margin==null?"—":c.margin.toFixed(2)+"%","毛利率（未稅）"),
+    kpi(c.equipRemain>=0?"g":"r",fmtM(c.equipRemain),"設備採購 剩餘"),
+    kpi(c.opexRemain>=0?"g":"r",fmtM(c.opexRemain),"執行費 剩餘"));
+  m.append(k2);
+  m.append(el("div","gphase",`含稅實付合計 ${fmtM(c.spentGross)}　·　設備已用(未稅) ${fmtM(c.equipSpentNet)}　/　執行費已用(未稅) ${fmtM(c.opexSpentNet)}`));
+  if(c.equipRemain<0) m.append(el("div","robar",`⚠ 設備採購已超出預算 ${fmtM(-c.equipRemain)}。`));
+  if(c.opexRemain<0) m.append(el("div","robar",`⚠ 專案執行費已超出預算 ${fmtM(-c.opexRemain)}。`));
+  // 支出結構圖（未稅）
+  const chart=hbars("支出結構（依分類，未稅）", EXP_CATS.map(x=>[x,c.byCatNet[x]||0]), EXP_COLOR);
+  chart.style.margin="14px 0";m.append(chart);
+  // 硬體設備出貨明細
+  renderShipTable(m,p);
+  // 支出明細（可直接編輯 + 下方直接新增）
+  renderExpTable(m,p);
+}
+function renderShipTable(m,p){
+  m.append(el("div","row between",'<b>硬體設備出貨明細</b>'));
+  const wrap=el("div","card");wrap.style.cssText="box-shadow:none;border:1px solid var(--line);padding:6px 4px;margin-bottom:6px";
+  const tb=el("table");
+  tb.innerHTML="<thead><tr><th style='width:140px'>出貨日期</th><th>品項 / 設備</th><th style='width:80px'>數量</th><th>備註</th><th style='width:34px'></th></tr></thead>";
+  const bd=el("tbody");
+  p.shipments.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(s=>{
+    const tr=el("tr");
+    const dD=el("td"),di=mkDateInput(s.date,(d)=>{s.date=d?d.toISOString():s.date;save();});dD.append(di);
+    const dI=el("td"),ii=el("input");ii.type="text";ii.value=s.item||'';ii.onchange=()=>{s.item=ii.value;save();};dI.append(ii);
+    const dQ=el("td"),qi=el("input");qi.type="number";qi.value=s.qty||'';qi.onchange=()=>{s.qty=+qi.value||0;save();};dQ.append(qi);
+    const dN=el("td"),ni=el("input");ni.type="text";ni.value=s.note||'';ni.onchange=()=>{s.note=ni.value;save();};dN.append(ni);
+    const dX=el("td"),del=el("button","ib rm","✕");del.onclick=()=>{p.shipments=p.shipments.filter(x=>x.id!==s.id);save();drawProject(p);};dX.append(del);
+    tr.append(dD,dI,dQ,dN,dX);bd.append(tr);
+  });
+  const ar=el("tr");ar.style.background="var(--tiffany-bg)";
+  const nd=mkDateInput(today().toISOString(),()=>{});
+  const ni=el("input");ni.type="text";ni.placeholder="設備品項";
+  const nq=el("input");nq.type="number";nq.placeholder="數量";
+  const nn=el("input");nn.type="text";nn.placeholder="備註";
+  const addBtn=el("button","btn mini","＋ 新增");
+  addBtn.onclick=()=>{if(!ni.value.trim()){ni.focus();return;}
+    p.shipments.push({id:uid(),date:(parseDate(nd.value)||today()).toISOString(),item:ni.value.trim(),qty:+nq.value||0,note:nn.value||''});
+    save();drawProject(p);};
+  [nd,ni,nq,nn].forEach(x=>{const td=el("td");td.append(x);ar.append(td);});
+  const tb2=el("td");tb2.append(addBtn);ar.append(tb2);
+  bd.append(ar);tb.append(bd);wrap.append(tb);m.append(wrap);
+}
+function renderExpTable(m,p){
+  m.append(el("div","row between",'<b>支出明細</b>'));
+  const wrap=el("div","card");wrap.style.cssText="box-shadow:none;border:1px solid var(--line);padding:6px 4px";
+  const tb=el("table");
+  tb.innerHTML="<thead><tr><th style='width:140px'>日期</th><th style='width:110px'>分類</th><th style='width:120px'>實付金額(含稅)</th><th style='width:110px'>未稅額</th><th>說明</th><th style='width:34px'></th></tr></thead>";
+  const bd=el("tbody");
+  p.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(e=>{
+    const tr=el("tr");
+    const dD=el("td"),di=mkDateInput(e.date,(d)=>{e.date=d?d.toISOString():e.date;save();});dD.append(di);
+    const dC=el("td"),sel=el("select");EXP_CATS.forEach(o=>{const op=el("option",null,o);if(o===e.category)op.selected=true;sel.append(op);});sel.onchange=()=>{e.category=sel.value;save();drawProject(p);};dC.append(sel);
+    const dA=el("td"),ai=el("input");ai.type="number";ai.value=e.amount||'';ai.onchange=()=>{e.amount=+ai.value||0;save();drawProject(p);};dA.append(ai);
+    const dN=el("td",null,`<b>${fmtM(netOf(e.amount))}</b>`);
+    const dNo=el("td"),no=el("input");no.type="text";no.value=e.note||'';no.onchange=()=>{e.note=no.value;save();};dNo.append(no);
+    const dX=el("td"),del=el("button","ib rm","✕");del.onclick=()=>{p.expenses=p.expenses.filter(x=>x.id!==e.id);save();drawProject(p);};dX.append(del);
+    tr.append(dD,dC,dA,dN,dNo,dX);bd.append(tr);
+  });
+  if(!p.expenses.length){const tr=el("tr");tr.innerHTML='<td colspan="6" class="empty">尚無支出，於下方直接新增</td>';bd.append(tr);}
+  // 直接新增列
+  const ar=el("tr");ar.style.background="var(--tiffany-bg)";
+  const nd=mkDateInput(today().toISOString(),()=>{});
+  const ns=el("select");EXP_CATS.forEach(o=>ns.append(el("option",null,o)));
+  const na=el("input");na.type="number";na.placeholder="含稅金額";
+  const nn=el("input");nn.type="text";nn.placeholder="說明";
+  const addBtn=el("button","btn mini","＋ 新增");
+  addBtn.onclick=()=>{const amt=+na.value||0;if(!amt){na.focus();return;}
+    p.expenses.push({id:uid(),date:(parseDate(nd.value)||today()).toISOString(),category:ns.value,amount:amt,note:nn.value||'',by:ME.name||''});
+    save();drawProject(p);};
+  [nd,ns,na].forEach(x=>{const td=el("td");td.append(x);ar.append(td);});
+  ar.append(el("td",null,'<small class="gphase">自動</small>'));
+  const tdn=el("td");tdn.append(nn);ar.append(tdn);
+  const tdb=el("td");tdb.append(addBtn);ar.append(tdb);
+  bd.append(ar);tb.append(bd);wrap.append(tb);m.append(wrap);
+}
+
+/* ============ 報修工單 ============ */
+/* ===== 報修統計 ===== */
+function monthKey(d){const x=new Date(d);return x.getFullYear()+"/"+String(x.getMonth()+1).padStart(2,'0');}
+function ticketStats(){
+  const ts=DB.tickets;
+  const open=ts.filter(t=>t.status!=="已結案");
+  const closed=ts.filter(t=>t.status==="已結案");
+  const overdue=open.filter(ticketOverdue).length;
+  // MTTR（平均處理天數）
+  let mttr="—";
+  const durs=closed.filter(t=>t.closedAt).map(t=>Math.max(0,dayDiff(t.closedAt,t.reportedAt)));
+  if(durs.length)mttr=(durs.reduce((a,b)=>a+b,0)/durs.length).toFixed(1);
+  // SLA 達成率（結案時間 <= SLA 期限）
+  let slaRate="—";
+  const rated=closed.filter(t=>t.closedAt);
+  if(rated.length){const ok=rated.filter(t=>new Date(t.closedAt)<=ticketDue(t)).length;
+    slaRate=Math.round(ok/rated.length*100)+"%";}
+  const by=(key,val)=>{const m={};ts.forEach(t=>{const k=val?val(t):t[key];m[k]=(m[k]||0)+1;});return m;};
+  // 近 6 個月趨勢
+  const months=[];const now=today();
+  for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(monthKey(d));}
+  const trend={};months.forEach(m=>trend[m]=0);
+  ts.forEach(t=>{const k=monthKey(t.reportedAt);if(k in trend)trend[k]++;});
+  return {total:ts.length,open:open.length,overdue,mttr,slaRate,
+    status:by("status"),severity:by("severity"),category:by("category"),months,trend};
+}
+function hbars(title, entries, colorOf){
+  const card=el("div","chartcard");card.append(el("h4",null,title));
+  const max=Math.max(1,...entries.map(e=>e[1]));
+  if(entries.every(e=>e[1]===0)) card.append(el("div","gphase","尚無資料"));
+  entries.forEach(([label,val])=>{
+    const row=el("div","hbar");
+    row.innerHTML=`<div>${label}</div><div class="track"><div class="fill" style="width:${val/max*100}%;background:${colorOf(label)}"></div></div><div class="v">${Math.round(val).toLocaleString("en-US")}</div>`;
+    card.append(row);
+  });
+  return card;
+}
+function colChart(title, labels, values){
+  const card=el("div","chartcard");card.append(el("h4",null,title));
+  const max=Math.max(1,...values);
+  const box=el("div","cols");
+  labels.forEach((lb,i)=>{
+    const w=el("div","colwrap");
+    w.innerHTML=`<div class="colv">${values[i]}</div><div class="col" style="height:${values[i]/max*100}%"></div><small>${lb}</small>`;
+    box.append(w);
+  });
+  card.append(box);return card;
+}
+const SEV_COLOR=l=>({"緊急":"#e5533c","高":"#f0a92b","一般":"#0ABAB5","低":"#64748b"}[l]||"#64748b");
+const STATUS_COLOR=l=>({"新建":"#64748b","受理":"#7fded9","處理中":"#0ABAB5","待客戶確認":"#f0a92b","已結案":"#2fae66"}[l]||"#64748b");
+const CAT_COLOR=l=>({"硬體/感測器":"#0ABAB5","訊號/串接":"#089c98","AI模型/控制邏輯":"#7c6cc4","現場/其他":"#64748b"}[l]||"#64748b");
+function renderTickStats(app){
+  const s=ticketStats();
+  const k=el("div","grid kpis");
+  k.append(kpi("t",s.total,"總報修數"),kpi("a",s.open,"待處理"),
+    kpi("r",s.overdue,"逾期(SLA)"),kpi("g",s.slaRate,"SLA 達成率"));
+  app.append(k);
+  const k2=el("div","grid kpis");k2.style.gridTemplateColumns="repeat(2,1fr)";
+  k2.append(kpi("t",s.mttr,"平均處理天數 (MTTR)"),kpi("g",(s.total-s.open),"已結案數"));
+  app.append(k2);
+  const wrap=el("div","charts");
+  wrap.append(
+    hbars("依狀態", TICKET_STATUS.map(x=>[x,s.status[x]||0]), STATUS_COLOR),
+    hbars("依分級", ["緊急","高","一般","低"].map(x=>[x,s.severity[x]||0]), SEV_COLOR),
+    hbars("依分類", CATEGORY.map(x=>[x,s.category[x]||0]), CAT_COLOR),
+    colChart("近 6 個月報修趨勢", s.months.map(m=>m.slice(5)), s.months.map(m=>s.trend[m]))
+  );
+  app.append(wrap);
+}
+
+let tickView="list";
+function renderTick(){
+  const app=$("#app");app.innerHTML="";
+  app.append(el("div","row between",'<h2>報修工單</h2>'));
+  if(canEdit()){const addBtn=el("button","btn needEdit","＋ 新增報修");addBtn.onclick=()=>openTicketForm(null);
+  $("#app>.row.between").append(addBtn);}
+  app.append(el("div","page-sub","結案後維護期報修追蹤：分級 SLA、狀態流、處理方式、回溯專案 / 設備。"));
+  const tabs=el("div","sub-tabs");
+  [["list","清單"],["stats","統計圖表"]].forEach(([k,l])=>{
+    const b=el("button",tickView===k?"on":"",l);b.onclick=()=>{tickView=k;renderTick();};tabs.append(b);
+  });
+  app.append(tabs);
+  if(tickView==="stats"){ renderTickStats(app); return; }
+  const c=el("div","card");
+  const tb=el("table");tb.innerHTML="<thead><tr><th>單號</th><th>主旨</th><th>專案 / 設備</th><th>分類</th><th>分級</th><th>狀態</th><th>SLA</th><th>處理人</th></tr></thead>";
+  const bd=el("tbody");
+  DB.tickets.slice().reverse().forEach(t=>{
+    const p=DB.projects.find(x=>x.id===t.projectId);
+    const tr=el("tr","clk");tr.onclick=()=>openTicket(t.id);
+    tr.innerHTML=`<td><b>${t.no}</b></td><td>${t.title}</td>
+      <td>${p?p.name:'—'}<br><small>${t.device||''}</small></td>
+      <td><small>${t.category}</small></td><td>${sevBadge(t.severity)}</td>
+      <td><span class="badge ${t.status==='已結案'?'s-tiff':'s-grey'}"><span class="dot"></span>${t.status}</span></td>
+      <td>${t.status==='已結案'?'<small>已結案</small>':(ticketOverdue(t)?'<span class="badge s-red"><span class="dot"></span>逾期</span>':fmt(ticketDue(t))+' 前')}</td>
+      <td>${t.assignee||'—'}</td>`;
+    bd.append(tr);
+  });
+  tb.append(bd);c.append(tb);app.append(c);
+}
+function openTicket(id){const t=DB.tickets.find(x=>x.id===id);drawTicket(t);openModal();}
+function drawTicket(t){
+  const p=DB.projects.find(x=>x.id===t.projectId);
+  const m=$("#modalBox");m.innerHTML="";
+  m.append(el("button","x","×"));m.querySelector(".x").onclick=closeModal;
+  m.append(el("h3",null,`${t.no}　${sevBadge(t.severity)} ${ticketOverdue(t)?'<span class="badge s-red"><span class="dot"></span>SLA 逾期</span>':''}`));
+  m.append(el("div","gphase",`回報：${fmt(t.reportedAt)}　·　來源：${t.source}　·　SLA：${SEVERITY[t.severity]} 小時（應於 ${fmt(ticketDue(t))} 前回應）　·　保固內：${t.warranty?'是':'否（付費）'}`));
+  const body=el("div");body.style.marginTop="10px";
+  body.innerHTML=`<div class="field"><label>主旨</label><b>${t.title}</b></div>
+    <div class="f2"><div class="field"><label>關聯專案</label>${p?p.name+'（'+p.customer+'）':'<span class="badge s-grey" style="padding:1px 8px">NA（不關聯）</span>'}</div>
+    <div class="field"><label>設備 / 點位</label>${t.device||'—'}</div></div>
+    <div class="f2"><div class="field"><label>分類</label>${t.category}</div>
+    <div class="field"><label>處理人</label>${t.assignee||'—'}</div></div>`;
+  m.append(body);
+  const hf=el("div","field");hf.innerHTML=`<label>處理方式 / 進度記錄</label>`;
+  const ta=el("textarea");ta.rows=4;ta.value=t.handling||"";ta.oninput=()=>{t.handling=ta.value;save();};
+  hf.append(ta);m.append(hf);
+  // 狀態流
+  const sf=el("div","field");sf.innerHTML=`<label>狀態流程</label>`;
+  const row=el("div","row");
+  TICKET_STATUS.forEach(s=>{
+    const b=el("button",(t.status===s?"btn mini":"btn ghost mini"),s);
+    b.onclick=()=>{t.status=s;if(s==="已結案")t.closedAt=today().toISOString();else t.closedAt=null;save();drawTicket(t);renderTickIfActive();};
+    row.append(b);
+  });
+  sf.append(row);m.append(sf);
+  if(t.status==="已結案")m.append(el("div","badge s-tiff",`已結案　·　${fmt(t.closedAt)}　·　處理時長 ${Math.max(0,dayDiff(t.closedAt,t.reportedAt))} 天`));
+  // 編輯 / 刪除
+  const bar=el("div","row");bar.style.marginTop="16px";
+  if(canEdit()){const eb=el("button","btn ghost mini","✎ 編輯欄位");eb.onclick=()=>openTicketForm(t);bar.append(eb);}
+  if(canDelete()){const db=el("button","btn ghost mini","🗑 刪除此工單");db.style.color="#a8331f";
+    db.onclick=()=>{if(confirm(`確定刪除報修單「${t.no}」？`)){DB.tickets=DB.tickets.filter(x=>x.id!==t.id);save();closeModal();}};bar.append(db);}
+  m.append(bar);
+}
+function renderTickIfActive(){ if(TAB==="tick")renderTick(); }
+function openTicketForm(t){        // t 為 null=新增，否則=編輯
+  const isNew=!t;
+  const m=$("#modalBox");m.innerHTML="";
+  m.append(el("button","x","×"));m.querySelector(".x").onclick=closeModal;
+  m.append(el("h3",null,isNew?"新增報修":"編輯報修 "+t.no));
+  const title=el("input");title.value=t?.title||"";
+  const projSel=el("select");
+  const na=el("option",null,"NA（不關聯，已結案案件）");na.value="__NA__";projSel.append(na);
+  DB.projects.forEach(pp=>{const o=el("option",null,`${pp.name}（${pp.customer}）`);o.value=pp.id;if(t&&t.projectId===pp.id)o.selected=true;projSel.append(o);});
+  if(t&&!t.projectId) na.selected=true;
+  const device=el("input");device.value=t?.device||"";
+  const catSel=el("select");CATEGORY.forEach(c=>{const o=el("option",null,c);if(t?t.category===c:c==="硬體/感測器")o.selected=true;catSel.append(o);});
+  const sevSel=el("select");["緊急","高","一般","低"].forEach(sv=>{const o=el("option",null,sv);if(t?t.severity===sv:sv==="一般")o.selected=true;sevSel.append(o);});
+  const src=el("input");src.value=t?.source||"";src.placeholder="電話 / LINE / Email / 系統告警";
+  const asg=el("input");asg.value=t?.assignee||"";asg.placeholder="處理人";
+  const warSel=el("select");[["true","保固內"],["false","否（付費）"]].forEach(([v,l])=>{const o=el("option",null,l);o.value=v;if(t?String(!!t.warranty)===v:v==="true")o.selected=true;warSel.append(o);});
+  m.append(fld("報修主旨 *",title));
+  const r1=el("div","f2");r1.append(fld("關聯專案",projSel),fld("設備 / 點位",device));m.append(r1);
+  const r2=el("div","f3");r2.append(fld("分類",catSel),fld("分級（SLA）",sevSel),fld("保固",warSel));m.append(r2);
+  const r3=el("div","f2");r3.append(fld("來源",src),fld("處理人",asg));m.append(r3);
+  const bar=el("div","row");bar.style.marginTop="16px";
+  const saveB=el("button","btn",isNew?"建立報修":"儲存");
+  saveB.onclick=()=>{
+    if(!title.value.trim()){title.focus();return;}
+    const projectId=projSel.value==="__NA__"?null:projSel.value;
+    if(isNew){
+      DB.tickets.push({id:uid(),no:genTicketNo(ymd(today())),title:title.value.trim(),projectId,
+        device:device.value.trim(),category:catSel.value,severity:sevSel.value,source:src.value.trim()||"電話",
+        reportedAt:today().toISOString(),status:"新建",assignee:asg.value.trim(),handling:"",closedAt:null,warranty:warSel.value==="true"});
+    }else{
+      t.title=title.value.trim();t.projectId=projectId;t.device=device.value.trim();t.category=catSel.value;
+      t.severity=sevSel.value;t.source=src.value.trim()||"電話";t.assignee=asg.value.trim();t.warranty=warSel.value==="true";
+    }
+    save();closeModal();
+  };
+  const cancel=el("button","btn ghost","取消");cancel.onclick=closeModal;
+  bar.append(saveB,cancel);
+  if(!isNew && canDelete()){
+    const del=el("button","btn","刪除");del.style.cssText="background:var(--red);margin-left:auto";
+    del.onclick=()=>{if(confirm(`確定刪除報修單「${t.no}」？`)){DB.tickets=DB.tickets.filter(x=>x.id!==t.id);save();closeModal();}};
+    bar.append(del);
+  }
+  m.append(bar);openModal();
+}
+
+/* ============ 資料 / 匯出 ============ */
+function renderData(){
+  const app=$("#app");app.innerHTML="";
+  app.append(el("h2",null,"資料 / 設定"));
+  const modeTxt = cloud.on ? `雲端多人模式（已連線，登入為 ${ME.name}／${ME.role}）` : "本機試用模式（未連雲端）";
+  app.append(el("div","page-sub",modeTxt));
+  // 雲端連線狀態
+  const cc=el("div","card");
+  cc.innerHTML=`<div class="row between"><b>雲端連線</b>
+    <span class="cloudtag ${cloud.on?'on':'off'}">${cloud.on?'● 已連線':'○ 未連線'}</span></div>
+    <div class="gphase" style="margin-top:8px;line-height:1.8">
+    ${cloud.on
+      ? '資料儲存在你們的 Supabase，3-10 人可即時共用。變更會自動同步，其他人畫面約 1 秒內更新。'
+      : '目前為單機。要開啟多人共用，請點下方「設定雲端連線」貼上 Supabase 資訊（建置指引另附）。'}</div>`;
+  const cbtn=el("button","btn","☁ 設定雲端連線 / 登入");cbtn.style.marginTop="10px";
+  cbtn.onclick=()=>screenConfig();
+  cc.append(cbtn);
+  if(cloud.on){ const lo=el("button","btn ghost","登出");lo.style.marginLeft="8px";
+    lo.onclick=async()=>{await cloud.sb.auth.signOut();location.reload();}; cc.append(lo); }
+  app.append(cc);
+  const c=el("div","card");
+  const exp=el("button","btn","⬇ 匯出備份 (JSON)");exp.onclick=()=>{
+    const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+    a.download="WCRM_PM備份_"+new Date().toISOString().slice(0,10)+".json";a.click();};
+  const impL=el("label",null,"匯入備份：");impL.style.marginTop="14px";
+  const imp=el("input");imp.type="file";imp.accept=".json";
+  imp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+    r.onload=()=>{try{DB=JSON.parse(r.result);save();alert("匯入成功");render();}catch(err){alert("檔案格式錯誤");}};r.readAsText(f);};
+  c.append(exp,el("div",null,"<br>"),impL,imp);
+  if(!cloud.on || canManage()){
+    const rst=el("button","btn ghost","↺ 重置為範例資料");rst.style.marginTop="12px";
+    rst.onclick=()=>{if(confirm("確定重置？現有資料會清除")){DB=seed();save();render();}};
+    c.append(el("div",null,"<br>"),rst);
+  }
+  app.append(c);
+}
+
+/* ============ Modal ============ */
+function openModal(){$("#modalBg").classList.add("on");}
+function closeModal(){$("#modalBg").classList.remove("on");render();}
+$("#modalBg").onclick=e=>{if(e.target.id==="modalBg")closeModal();};
+
+boot();
+</script>
+</body>
+</html>
