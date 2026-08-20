@@ -541,7 +541,13 @@ async function ensureProfile(user, name){
 async function enterCloud(session){
   cloud.on=true; cloud.user=session.user;
   let prof=await ensureProfile(session.user, "");
-  ME={ role:prof.role||"檢視者", name:prof.name||session.user.email, email:session.user.email };
+  if(prof && prof.active===false){                     // 離職/停用帳號：擋登入
+    await cloud.sb.auth.signOut(); cloud.on=false;
+    hideAuth(); screenLogin();
+    setTimeout(()=>msg("此帳號已停用（離職），如需恢復請洽管理員。","err"),50);
+    return;
+  }
+  ME={ role:prof.role||"PM", name:prof.name||session.user.email, email:session.user.email };
   $("#uName").textContent=ME.name; $("#uRole").textContent=ME.role;
   $("#userchip").style.display=""; $("#footMode").textContent="雲端多人模式";
   $("#logoutBtn").onclick=async()=>{ await cloud.sb.auth.signOut(); location.reload(); };
@@ -556,23 +562,50 @@ async function enterCloud(session){
 async function renderMembers(){
   const app=$("#app");app.innerHTML="";
   app.append(el("h2",null,"成員管理"));
-  app.append(el("div","page-sub","指派每位成員的角色。admin＝全權；PM＝可建立/編輯專案；成員＝一般編輯；檢視者＝唯讀。"));
+  app.append(el("div","page-sub","指派角色與在職狀態。admin＝全權；PM＝可建立/編輯專案；成員＝一般編輯；檢視者＝唯讀。標記「離職」者無法再登入。"));
   if(!cloud.on){ app.append(el("div","robar","此功能需在雲端模式下使用。")); return; }
   const c=el("div","card");
   const { data:rows, error } = await cloud.sb.from("profiles").select("*").order("role");
   if(error){ c.append(el("div","empty","讀取失敗："+error.message)); app.append(c); return; }
-  const tb=el("table");tb.innerHTML="<thead><tr><th>姓名</th><th>Email</th><th>角色</th></tr></thead>";
+  const tb=el("table");tb.innerHTML="<thead><tr><th>姓名</th><th>Email</th><th>角色</th><th>狀態</th><th>操作</th></tr></thead>";
   const bd=el("tbody");
   (rows||[]).forEach(r=>{
+    const isMe=r.id===cloud.user.id, active=r.active!==false;
     const tr=el("tr");
+    // 角色
     const sel=el("select","allow");["admin","PM","成員","檢視者"].forEach(o=>{const op=el("option",null,o);if(o===r.role)op.selected=true;sel.append(op);});
     sel.onchange=async()=>{ await cloud.sb.from("profiles").update({role:sel.value}).eq("id",r.id);
-      if(r.id===cloud.user.id){ ME.role=sel.value; $("#uRole").textContent=sel.value; applyPerm(); } };
-    const td=el("td");td.append(sel);
+      if(isMe){ ME.role=sel.value; $("#uRole").textContent=sel.value; applyPerm(); } };
+    const tdR=el("td");tdR.append(sel);
+    // 狀態徽章
+    const tdS=el("td",null,active?'<span class="badge s-green" style="padding:2px 8px">在職</span>':'<span class="badge s-red" style="padding:2px 8px">離職</span>');
+    // 操作：離職/復職 + 刪除
+    const tdA=el("td");const ops=el("div","row");
+    if(!isMe){
+      const tog=el("button","btn ghost mini",active?"標記離職":"復職");
+      tog.onclick=async()=>{ if(active && !confirm(`將「${r.name||r.email}」標記為離職？該帳號將無法再登入。`))return;
+        await cloud.sb.from("profiles").update({active:!active}).eq("id",r.id); renderMembers(); };
+      const del=el("button","btn ghost mini","刪除帳號");del.style.color="#a8331f";
+      del.onclick=()=>deleteMember(r);
+      ops.append(tog,del);
+    } else { ops.append(el("span","gphase","（目前登入者）")); }
+    tdA.append(ops);
     tr.innerHTML=`<td><b>${r.name||"—"}</b></td><td>${r.email}</td>`;
-    tr.append(td);bd.append(tr);
+    tr.append(tdR,tdS,tdA);bd.append(tr);
   });
   tb.append(bd);c.append(tb);app.append(c);
+  app.append(el("div","gphase","說明：「離職」是停用帳號（保留紀錄、擋登入），建議優先用。「刪除帳號」會徹底移除帳號、釋放 Email 讓其可重新註冊，需先在 Supabase 部署 delete-user 函式（見建置指引）。"));
+}
+async function deleteMember(r){
+  if(!confirm(`確定「徹底刪除」帳號 ${r.email}？\n此動作會移除帳號本體並釋放 Email（可重新註冊），無法復原。\n若只是要停用，請改用「標記離職」。`)) return;
+  try{
+    const { data, error } = await cloud.sb.functions.invoke("delete-user",{ body:{ userId:r.id } });
+    if(error) throw new Error(error.message);
+    if(data && data.error) throw new Error(data.error);
+    alert("已刪除。"); renderMembers();
+  }catch(e){
+    alert("刪除失敗："+e.message+"\n\n可能原因：尚未在 Supabase 部署 delete-user 函式。\n替代方式：到 Supabase → Authentication → Users 手動刪除該帳號。");
+  }
 }
 
 /* ============ 儀表板 ============ */
@@ -1270,7 +1303,7 @@ function renderData(){
   imp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
     r.onload=()=>{try{DB=JSON.parse(r.result);save();alert("匯入成功");render();}catch(err){alert("檔案格式錯誤");}};r.readAsText(f);};
   c.append(exp,el("div",null,"<br>"),impL,imp);
-  if(!cloud.on || canManage()){
+  if(!cloud.on){   // 只在單機試玩模式顯示；雲端正式環境隱藏，避免誤清共用資料
     const rst=el("button","btn ghost","↺ 重置為範例資料");rst.style.marginTop="12px";
     rst.onclick=()=>{if(confirm("確定重置？現有資料會清除")){DB=seed();save();render();}};
     c.append(el("div",null,"<br>"),rst);
