@@ -171,6 +171,7 @@
   <button data-tab="proj">專案追蹤</button>
   <button data-tab="tick">報修工單</button>
   <button data-tab="members" id="navMembers" style="display:none">成員管理</button>
+  <button data-tab="logs" id="navLogs" style="display:none">資料異動紀錄</button>
   <button data-tab="data">資料 / 設定</button>
 </nav>
 <main id="app"></main>
@@ -213,6 +214,7 @@ const today = ()=>{const n=new Date();return new Date(Date.UTC(n.getFullYear(),n
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
 const dayDiff=(a,b)=>Math.round((new Date(a)-new Date(b))/86400000);
 const uid=()=>Math.random().toString(36).slice(2,8);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ymd=d=>{const x=new Date(d);return ""+x.getFullYear()+String(x.getMonth()+1).padStart(2,'0')+String(x.getDate()).padStart(2,'0');};
 // 解析手動輸入的日期：接受 2025-11-07 / 2025/11/07 / 20251107
 function parseDate(str){
@@ -299,6 +301,30 @@ function save(){
   if(cloud.on){ clearTimeout(syncTimer); syncTimer=setTimeout(syncAll,450); }  // 雲端模式：資料只留記憶體+Supabase，不落地 localStorage
   else localStorage.setItem(KEY,JSON.stringify(DB));                            // 本機模式：存本機
 }
+/* ============ 資料異動紀錄（audit log；只記新增/修改/刪除，查看不記錄）============ */
+const LOGKEY="husu_log_v1";
+function fmtLog(ts){
+  try{
+    const parts=new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date(ts));
+    const g=t=>(parts.find(x=>x.type===t)||{}).value||'';
+    return `${g('year')}${g('month')}${g('day')} ${g('hour')}:${g('minute')}`;
+  }catch(e){ return String(ts).slice(0,16).replace('T',' '); }
+}
+function logAction(scope,target,action,detail){
+  const user=(typeof ME!=="undefined"&&ME&&ME.name)?ME.name:'使用者';
+  if(cloud.on){
+    try{ cloud.sb.from("logs").insert({user_id:cloud.user?cloud.user.id:null,user_name:user,scope,target:target||'',action,detail:detail||''}); }catch(e){}
+  }else{
+    try{ const arr=JSON.parse(localStorage.getItem(LOGKEY)||"[]"); arr.push({ts:new Date().toISOString(),user,scope,target:target||'',action,detail:detail||''}); localStorage.setItem(LOGKEY,JSON.stringify(arr.slice(-2000))); }catch(e){}
+  }
+}
+async function loadLogs(){
+  if(cloud.on){
+    try{ const {data}=await cloud.sb.from("logs").select("*").order("ts",{ascending:false}).limit(1000);
+      return (data||[]).map(r=>({ts:r.ts,user:r.user_name,scope:r.scope,target:r.target,action:r.action,detail:r.detail})); }catch(e){ return []; }
+  }
+  try{ return JSON.parse(localStorage.getItem(LOGKEY)||"[]").slice().reverse(); }catch(e){ return []; }
+}
 function getCfg(){
   if(CONFIG.url&&CONFIG.anonKey) return {url:CONFIG.url,anonKey:CONFIG.anonKey};
   try{const c=JSON.parse(localStorage.getItem(CFGKEY)||"null");if(c&&c.url&&c.anonKey)return c;}catch(e){}
@@ -316,11 +342,19 @@ function canDeleteProject(p){
   if(ME.role==="PM" && p && p.pm && ME.name && String(p.pm).trim()===String(ME.name).trim()) return true;
   return false;
 }
+// 專案編輯（修改已建立的專案）：admin，或被指定為該專案負責 PM 者
+function canEditProject(p){
+  if(ME.role==="admin") return true;
+  if(p && p.pm && ME.name && String(p.pm).trim()===String(ME.name).trim()) return true;
+  return false;
+}
 const costVisible=()=>["admin","PM"].includes(ME.role);   // 成本毛利僅 admin/PM 可見
+const logVisible =()=>["admin","PM"].includes(ME.role);   // 資料異動紀錄僅 admin/PM 可見
 function applyPerm(){
   document.body.classList.toggle("ro", !canEdit());
   document.body.classList.toggle("nodel", !canDelete());
   $("#navMembers").style.display = canManage()&&cloud.on ? "" : "none";
+  const nl=$("#navLogs"); if(nl) nl.style.display = logVisible() ? "" : "none";
 }
 
 /* ============ 雲端資料層 ============ */
@@ -447,7 +481,7 @@ document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active",x===b));
   render();
 });
-function render(){ applyPerm(); ({dash:renderDash,proj:renderProj,tick:renderTick,members:renderMembers,data:renderData}[TAB]||renderDash)(); }
+function render(){ applyPerm(); ({dash:renderDash,proj:renderProj,tick:renderTick,members:renderMembers,logs:renderLogs,data:renderData}[TAB]||renderDash)(); }
 
 /* ============ 啟動 / 登入 / 設定 ============ */
 const AUTH=$("#authOverlay"), ACARD=$("#authCard");
@@ -580,7 +614,8 @@ async function renderMembers(){
     const tr=el("tr");
     // 角色
     const sel=el("select","allow");["admin","PM","成員","檢視者"].forEach(o=>{const op=el("option",null,o);if(o===r.role)op.selected=true;sel.append(op);});
-    sel.onchange=async()=>{ await cloud.sb.from("profiles").update({role:sel.value}).eq("id",r.id);
+    sel.onchange=async()=>{ const oldR=r.role; await cloud.sb.from("profiles").update({role:sel.value}).eq("id",r.id);
+      logAction("帳號",r.name||r.email,"修改",`角色 ${oldR}→${sel.value}`); r.role=sel.value;
       if(isMe){ ME.role=sel.value; $("#uRole").textContent=sel.value; applyPerm(); } };
     const tdR=el("td");tdR.append(sel);
     // 狀態徽章
@@ -590,7 +625,8 @@ async function renderMembers(){
     if(!isMe){
       const tog=el("button","btn ghost mini",active?"標記離職":"復職");
       tog.onclick=async()=>{ if(active && !confirm(`將「${r.name||r.email}」標記為離職？該帳號將無法再登入。`))return;
-        await cloud.sb.from("profiles").update({active:!active}).eq("id",r.id); renderMembers(); };
+        await cloud.sb.from("profiles").update({active:!active}).eq("id",r.id);
+        logAction("帳號",r.name||r.email,"修改",active?"標記離職（停用登入）":"復職（恢復登入）"); renderMembers(); };
       const del=el("button","btn ghost mini","刪除帳號");del.style.color="#a8331f";
       del.onclick=()=>deleteMember(r);
       ops.append(tog,del);
@@ -608,10 +644,50 @@ async function deleteMember(r){
     const { data, error } = await cloud.sb.functions.invoke("delete-user",{ body:{ userId:r.id } });
     if(error) throw new Error(error.message);
     if(data && data.error) throw new Error(data.error);
+    logAction("帳號",r.name||r.email,"刪除","徹底刪除帳號（釋放 Email）");
     alert("已刪除。"); renderMembers();
   }catch(e){
     alert("刪除失敗："+e.message+"\n\n可能原因：尚未在 Supabase 部署 delete-user 函式。\n替代方式：到 Supabase → Authentication → Users 手動刪除該帳號。");
   }
+}
+
+/* ============ 資料異動紀錄檢視 ============ */
+async function renderLogs(){
+  const app=$("#app");app.innerHTML="";
+  app.append(el("h2",null,"資料異動紀錄"));
+  app.append(el("div","page-sub","記錄所有「新增／修改／刪除」操作（查看資料不會被記錄）。"+(cloud.on?"　雲端模式：全體共用同一份紀錄。":"　本機模式：僅存在此瀏覽器。")));
+  const bar=el("div","row");bar.style.cssText="gap:8px;flex-wrap:wrap;margin-bottom:10px";
+  const fScope=el("select");["全部類別","專案","報修","帳號","系統"].forEach(o=>fScope.append(el("option",null,o)));
+  const fAct=el("select");["全部動作","新增","修改","刪除"].forEach(o=>fAct.append(el("option",null,o)));
+  const fKey=el("input");fKey.placeholder="搜尋帳號 / 對象 / 內容";fKey.style.cssText="flex:1;min-width:180px";
+  bar.append(fScope,fAct,fKey);app.append(bar);
+  const info=el("div","gphase","載入中…");app.append(info);
+  const wrap=el("div","card");wrap.style.cssText="box-shadow:none;border:1px solid var(--line);padding:6px 4px";app.append(wrap);
+  const all=await loadLogs();
+  function draw(){
+    const kw=fKey.value.trim();
+    const rows=all.filter(l=>{
+      if(fScope.value!=="全部類別" && l.scope!==fScope.value) return false;
+      if(fAct.value!=="全部動作" && l.action!==fAct.value) return false;
+      if(kw && !`${l.user||''}${l.target||''}${l.detail||''}`.includes(kw)) return false;
+      return true;
+    });
+    info.textContent=`共 ${rows.length} 筆`+(all.length!==rows.length?`（總 ${all.length} 筆）`:"");
+    wrap.innerHTML="";
+    const tb=el("table");
+    tb.innerHTML="<thead><tr><th style='width:150px'>時間</th><th style='width:120px'>帳號</th><th style='width:64px'>類別</th><th>對象</th><th style='width:60px'>動作</th><th>內容</th></tr></thead>";
+    const bd=el("tbody");
+    if(!rows.length){const tr=el("tr");tr.innerHTML='<td colspan="6" class="empty">尚無異動紀錄</td>';bd.append(tr);}
+    rows.forEach(l=>{
+      const aCls=l.action==="刪除"?"s-red":(l.action==="新增"?"s-green":"s-amber");
+      const tr=el("tr");
+      tr.innerHTML=`<td><small>${fmtLog(l.ts)}</small></td><td><b>${esc(l.user||'—')}</b></td><td>${esc(l.scope||'')}</td><td>${esc(l.target||'')}</td><td><span class="badge ${aCls}" style="padding:1px 7px">${esc(l.action||'')}</span></td><td>${esc(l.detail||'')}</td>`;
+      bd.append(tr);
+    });
+    tb.append(bd);wrap.append(tb);
+  }
+  fScope.onchange=draw;fAct.onchange=draw;fKey.oninput=draw;
+  draw();
 }
 
 /* ============ 儀表板 ============ */
@@ -759,14 +835,19 @@ function openProject(id){
 }
 function drawProject(p){
   const h=projHealth(p);
+  const canEd=canEditProject(p);              // 僅 admin 或負責 PM 可修改此專案
+  // 非可編輯者：此專案明細整體轉唯讀（關閉 modal 後由 render→applyPerm 還原）
+  document.body.classList.toggle("ro", !canEd || !canEdit());
   const m=$("#modalBox");m.innerHTML="";
   m.append(el("button","x","×"));m.querySelector(".x").onclick=closeModal;
   m.append(el("h3",null,`${p.name} <span class="badge ${h.cls}"><span class="dot"></span>${h.txt}</span>`));
   m.append(el("div","gphase",`客戶：${p.customer}　·　PM：${p.pm}　·　進度 ${projProgress(p)}%`));
-  if(canProj()){
+  if(canEd){
     const eb=el("button","btn ghost mini","✎ 編輯專案資料");eb.style.marginTop="8px";
     eb.onclick=()=>openProjectForm(p);
     m.append(eb);
+  }else{
+    m.append(el("div","gphase","※ 此專案僅 admin 或負責 PM（"+(p.pm||"未指定")+"）可修改，你目前為檢視狀態。"));
   }
   // 專案整體時程設定：開始日 / 驗收日
   const setBox=el("div","card");setBox.style.cssText="box-shadow:none;background:#fafcfd;padding:12px 14px;margin:12px 0";
@@ -781,9 +862,9 @@ function drawProject(p){
   <button class="btn ghost mini" id="reDist">↻ 依開始/驗收日 重新分配 13 步驟時程</button>
   <span class="gphase" style="margin-left:8px">保留各步驟狀態，只重算計畫時程</span>`;
   m.append(setBox);
-  setBox.querySelector("#pStartBox").append(mkDateInput(p.startDate||startV,(d)=>{ if(d){p.startDate=d.toISOString();save();drawProject(p);} }));
-  setBox.querySelector("#pDueBox").append(mkDateInput(p.dueDate||dueV,(d)=>{ if(d){p.dueDate=d.toISOString();save();drawProject(p);} }));
-  setBox.querySelector("#reDist").onclick=()=>{p.startDate=(parseDate(startV)||today()).toISOString();p.dueDate=(parseDate(dueV)||today()).toISOString();redistribute(p);save();drawProject(p);};
+  setBox.querySelector("#pStartBox").append(mkDateInput(p.startDate||startV,(d)=>{ if(d){p.startDate=d.toISOString();logAction("專案",p.name,"修改",`開始日→${p.startDate.slice(0,10)}`);save();drawProject(p);} }));
+  setBox.querySelector("#pDueBox").append(mkDateInput(p.dueDate||dueV,(d)=>{ if(d){p.dueDate=d.toISOString();logAction("專案",p.name,"修改",`驗收日→${p.dueDate.slice(0,10)}`);save();drawProject(p);} }));
+  setBox.querySelector("#reDist").onclick=()=>{p.startDate=(parseDate(startV)||today()).toISOString();p.dueDate=(parseDate(dueV)||today()).toISOString();redistribute(p);logAction("專案",p.name,"修改","依開始～驗收日重排各步驟時程");save();drawProject(p);};
   const st=el("div","sub-tabs");
   const stTabs=[["steps","步驟 / 交付"],["gantt","甘特圖"],["meet","會議 / 決議 / 待追蹤"]];
   if(costVisible()) stTabs.push(["cost","成本 / 毛利"]);
@@ -837,7 +918,7 @@ function drawProject(p){
       info.append(planRow);
       r.append(info);
       const sel=el("select");STEP_STATUS.forEach(o=>{const op=el("option",null,o);if(o===s.status)op.selected=true;sel.append(op);});
-      sel.onchange=()=>{s.status=sel.value;
+      sel.onchange=()=>{if(s.status!==sel.value)logAction("專案",p.name,"修改",`步驟「${s.name}」狀態→${sel.value}`);s.status=sel.value;
         if(s.status==="已完成"&&!s.actualEnd)s.actualEnd=today().toISOString();
         if(s.status!=="已完成")s.actualEnd=null;
         if(s.status!=="未開始"&&!s.actualStart)s.actualStart=today().toISOString();
@@ -848,7 +929,7 @@ function drawProject(p){
       const sb=el("button","ib",s.sub?"«":"»");sb.title=s.sub?"升回主項":"設為子項(6.1)";
       sb.disabled=idx===0;sb.onclick=()=>{s.sub=!s.sub;save();drawProject(p);};
       const del=el("button","ib rm","✕");del.title="刪除";
-      del.onclick=()=>{if(confirm(`刪除步驟「${s.name}」？`)){p.steps.splice(idx,1);save();drawProject(p);}};
+      del.onclick=()=>{if(confirm(`刪除步驟「${s.name}」？`)){logAction("專案",p.name,"刪除",`步驟「${s.name}」`);p.steps.splice(idx,1);save();drawProject(p);}};
       ctr.append(sb,del);r.append(ctr);
       list.append(r);
     });
@@ -867,6 +948,7 @@ function drawProject(p){
       p.steps.push({id:uid(),phase:prev?prev.phase:"其他",name:nName.value.trim(),owner:nOwner.value.trim(),
         docs:nDocs.value.split(/[、,，]/).map(x=>x.trim()).filter(Boolean),sign:false,sub:false,
         planStart:ps.toISOString(),planEnd:addDays(ps,5).toISOString(),actualStart:null,actualEnd:null,status:"未開始"});
+      logAction("專案",p.name,"新增",`步驟「${nName.value.trim()}」`);
       save();drawProject(p);
     };
     addBox.append(addBtn);m.append(addBox);
@@ -882,7 +964,7 @@ function drawProject(p){
       const tt=el("b","edt",mt.title);tt.contentEditable=true;tt.onblur=()=>{mt.title=tt.textContent.trim()||mt.title;save();};
       const right=el("div","row");
       const db=el("div");db.style.width="150px";db.append(mkDateInput(mt.date,(d)=>{mt.date=d?d.toISOString():mt.date;save();}));
-      const delM=el("button","ib rm","✕");delM.title="刪除會議";delM.onclick=()=>{if(confirm("刪除此會議記錄？")){p.meetings=p.meetings.filter(x=>x.id!==mt.id);save();drawProject(p);}};
+      const delM=el("button","ib rm","✕");delM.title="刪除會議";delM.onclick=()=>{if(confirm("刪除此會議記錄？")){logAction("專案",p.name,"刪除",`會議記錄「${mt.title}」`);p.meetings=p.meetings.filter(x=>x.id!==mt.id);save();drawProject(p);}};
       right.append(db,delM);hd.append(tt,right);c.append(hd);
       // 決議事項
       c.append(el("label",null,"決議事項"));
@@ -928,13 +1010,14 @@ function drawProject(p){
     const mDateBox=el("div");let mDate=today();mDateBox.append(mkDateInput(today().toISOString(),(d)=>{mDate=d||today();}));
     mr.append(mTitle,mDateBox);mBox.append(mr);
     const mAdd=el("button","btn mini","＋ 新增會議");mAdd.style.marginTop="8px";
-    mAdd.onclick=()=>{p.meetings.push({id:uid(),date:(mDate||today()).toISOString(),title:mTitle.value.trim()||"會議",decisions:[],actions:[]});save();drawProject(p);};
+    mAdd.onclick=()=>{const mtt=mTitle.value.trim()||"會議";p.meetings.push({id:uid(),date:(mDate||today()).toISOString(),title:mtt,decisions:[],actions:[]});logAction("專案",p.name,"新增",`會議記錄「${mtt}」`);save();drawProject(p);};
     mBox.append(mAdd);m.append(mBox);
   }
 }
 const fld=(lb,inp)=>{const d=el("div","field");d.append(el("label",null,lb));d.append(inp);return d;};
 async function openProjectForm(p){        // p 為 null=新增，否則=編輯
   const isNew=!p;
+  if(!isNew && !canEditProject(p)){ alert("此專案僅 admin 或負責 PM 可修改。"); return; }
   const m=$("#modalBox");m.innerHTML="";
   m.append(el("button","x","×"));m.querySelector(".x").onclick=closeModal;
   m.append(el("h3",null,isNew?"新增專案":"編輯專案"));
@@ -955,14 +1038,25 @@ async function openProjectForm(p){        // p 為 null=新增，否則=編輯
     const inp=el("input");inp.value=p?.pm||"";inp.placeholder="PM 姓名";
     pmField=inp; getPm=()=>inp.value.trim();
   }
+  // PM 選定後鎖定：編輯既有專案時，僅 admin 可變更 PM
+  const pmLocked = (!isNew && ME.role!=="admin");
+  if(pmLocked){ pmField.disabled=true; pmField.title="PM 僅 admin 可變更"; }
   let startD=p?.startDate?new Date(p.startDate):today();
   let dueD=p?.dueDate?new Date(p.dueDate):addDays(today(),90);
   const startBox=el("div");startBox.append(mkDateInput(startD.toISOString(),(d)=>{startD=d||startD;}));
   const dueBox=el("div");dueBox.append(mkDateInput(dueD.toISOString(),(d)=>{dueD=d||dueD;}));
   m.append(fld("專案名稱 ✱（必填）",name));
-  const r=el("div","f2");r.append(fld("客戶",cust),fld("PM ✱（必填）",pmField));m.append(r);
+  const r=el("div","f2");r.append(fld("客戶",cust),fld(pmLocked?"PM（僅 admin 可變更）":"PM ✱（必填）",pmField));m.append(r);
   const r2=el("div","f2");r2.append(fld("專案開始日",startBox),fld("驗收日（結束）",dueBox));m.append(r2);
-  if(isNew) m.append(el("div","gphase","建立後自動套用 13 步驟標準流程，並依開始～驗收日分配時程。"));
+  let autoChk=null;
+  if(isNew){
+    autoChk=el("input");autoChk.type="checkbox";autoChk.checked=true;autoChk.style.width="auto";autoChk.id="autoSteps";
+    const lab=el("label");lab.htmlFor="autoSteps";lab.style.cssText="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600";
+    lab.append(autoChk,document.createTextNode("自動套用 13 步驟標準流程（依開始～驗收日分配時程）"));
+    const wrap=el("div","card");wrap.style.cssText="box-shadow:none;background:var(--tiffany-bg);padding:10px 12px;margin-top:4px";
+    wrap.append(lab,el("div","gphase","取消勾選則建立空專案，之後於專案內手動新增步驟。"));
+    m.append(wrap);
+  }
   const bar=el("div","row");bar.style.marginTop="16px";
   const saveB=el("button","btn",isNew?"建立專案":"儲存");
   saveB.onclick=()=>{
@@ -970,11 +1064,21 @@ async function openProjectForm(p){        // p 為 null=新增，否則=編輯
     if(!getPm()){ alert("請選擇/填寫 PM（必填）。"); pmField.focus(); return; }
     const s=startD||today(), du=dueD||addDays(s,90);
     if(isNew){
-      DB.projects.push({id:uid(),name:name.value.trim(),customer:cust.value.trim(),pm:getPm(),
-        startDate:s.toISOString(),dueDate:du.toISOString(),steps:buildSteps(s,du),meetings:[],expenses:[],shipments:[]});
+      const nm=name.value.trim();
+      const useSteps=autoChk?autoChk.checked:true;
+      DB.projects.push({id:uid(),name:nm,customer:cust.value.trim(),pm:getPm(),
+        startDate:s.toISOString(),dueDate:du.toISOString(),steps:useSteps?buildSteps(s,du):[],meetings:[],expenses:[],shipments:[]});
+      logAction("專案",nm,"新增",`建立專案（PM：${getPm()}${useSteps?"；自動套用13步驟":"；未套用步驟範本"}）`);
     }else{
+      const ch=[];
+      if(p.name!==name.value.trim())ch.push(`名稱→${name.value.trim()}`);
+      if((p.customer||'')!==cust.value.trim())ch.push(`客戶→${cust.value.trim()}`);
+      if((p.pm||'')!==getPm())ch.push(`PM→${getPm()}`);
+      if((p.startDate||'').slice(0,10)!==s.toISOString().slice(0,10))ch.push(`開始日→${s.toISOString().slice(0,10)}`);
+      if((p.dueDate||'').slice(0,10)!==du.toISOString().slice(0,10))ch.push(`驗收日→${du.toISOString().slice(0,10)}`);
       p.name=name.value.trim();p.customer=cust.value.trim();p.pm=getPm();
       p.startDate=s.toISOString();p.dueDate=du.toISOString();
+      if(ch.length) logAction("專案",p.name,"修改",`專案資料（${ch.join("、")}）`);
     }
     save();closeModal();
   };
@@ -982,7 +1086,7 @@ async function openProjectForm(p){        // p 為 null=新增，否則=編輯
   bar.append(saveB,cancel);
   if(!isNew && canDeleteProject(p)){
     const del=el("button","btn","刪除專案");del.style.cssText="background:var(--red);margin-left:auto";
-    del.onclick=()=>{if(confirm(`確定刪除專案「${p.name}」？此動作無法復原。`)){DB.projects=DB.projects.filter(x=>x.id!==p.id);save();closeModal();}};
+    del.onclick=()=>{if(confirm(`確定刪除專案「${p.name}」？此動作無法復原。`)){logAction("專案",p.name,"刪除","刪除整個專案");DB.projects=DB.projects.filter(x=>x.id!==p.id);save();closeModal();}};
     bar.append(del);
   } else if(!isNew){
     m.append(el("div","gphase","※ 僅 admin 或本專案負責 PM 可刪除此專案。"));
@@ -1030,9 +1134,9 @@ function renderCostTab(m,p){
     <div><label>採購預算（設備，未稅）</label><input type="number" id="cEq" value="${p.equipBudget||''}" placeholder="例：500000"></div>
     <div><label>其他費用預算（執行費，未稅）</label><input type="number" id="cOp" value="${p.opexBudget||''}" placeholder="例：300000"></div></div>`;
   m.append(setBox);
-  setBox.querySelector("#cAmt").onchange=e=>{p.contractAmount=+e.target.value||0;save();drawProject(p);};
-  setBox.querySelector("#cEq").onchange=e=>{p.equipBudget=+e.target.value||0;save();drawProject(p);};
-  setBox.querySelector("#cOp").onchange=e=>{p.opexBudget=+e.target.value||0;save();drawProject(p);};
+  setBox.querySelector("#cAmt").onchange=e=>{p.contractAmount=+e.target.value||0;logAction("專案",p.name,"修改",`合約金額→${fmtM(p.contractAmount)}`);save();drawProject(p);};
+  setBox.querySelector("#cEq").onchange=e=>{p.equipBudget=+e.target.value||0;logAction("專案",p.name,"修改",`採購預算→${fmtM(p.equipBudget)}`);save();drawProject(p);};
+  setBox.querySelector("#cOp").onchange=e=>{p.opexBudget=+e.target.value||0;logAction("專案",p.name,"修改",`其他費用預算→${fmtM(p.opexBudget)}`);save();drawProject(p);};
   // KPI
   const marginCls=c.margin==null?"t":(c.margin>=70?"g":(c.margin>=55?"a":"r"));
   const k=el("div","grid kpis");k.style.gridTemplateColumns="repeat(3,1fr)";
@@ -1067,7 +1171,7 @@ function renderShipTable(m,p){
     const dI=el("td"),ii=el("input");ii.type="text";ii.value=s.item||'';ii.onchange=()=>{s.item=ii.value;save();};dI.append(ii);
     const dQ=el("td"),qi=el("input");qi.type="number";qi.value=s.qty||'';qi.onchange=()=>{s.qty=+qi.value||0;save();};dQ.append(qi);
     const dN=el("td"),ni=el("input");ni.type="text";ni.value=s.note||'';ni.onchange=()=>{s.note=ni.value;save();};dN.append(ni);
-    const dX=el("td"),del=el("button","ib rm","✕");del.onclick=()=>{p.shipments=p.shipments.filter(x=>x.id!==s.id);save();drawProject(p);};dX.append(del);
+    const dX=el("td"),del=el("button","ib rm","✕");del.onclick=()=>{logAction("專案",p.name,"刪除",`硬體出貨「${s.item||''}」x${s.qty||0}`);p.shipments=p.shipments.filter(x=>x.id!==s.id);save();drawProject(p);};dX.append(del);
     tr.append(dD,dI,dQ,dN,dX);bd.append(tr);
   });
   const ar=el("tr");ar.style.background="var(--tiffany-bg)";
@@ -1078,6 +1182,7 @@ function renderShipTable(m,p){
   const addBtn=el("button","btn mini","＋ 新增");
   addBtn.onclick=()=>{if(!ni.value.trim()){ni.focus();return;}
     p.shipments.push({id:uid(),date:(parseDate(nd.value)||today()).toISOString(),item:ni.value.trim(),qty:+nq.value||0,note:nn.value||''});
+    logAction("專案",p.name,"新增",`硬體出貨「${ni.value.trim()}」x${+nq.value||0}`);
     save();drawProject(p);};
   [nd,ni,nq,nn].forEach(x=>{const td=el("td");td.append(x);ar.append(td);});
   const tb2=el("td");tb2.append(addBtn);ar.append(tb2);
@@ -1092,11 +1197,11 @@ function renderExpTable(m,p){
   p.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(e=>{
     const tr=el("tr");
     const dD=el("td"),di=mkDateInput(e.date,(d)=>{e.date=d?d.toISOString():e.date;save();});dD.append(di);
-    const dC=el("td"),sel=el("select");EXP_CATS.forEach(o=>{const op=el("option",null,o);if(o===e.category)op.selected=true;sel.append(op);});sel.onchange=()=>{e.category=sel.value;save();drawProject(p);};dC.append(sel);
-    const dA=el("td"),ai=el("input");ai.type="number";ai.value=e.amount||'';ai.onchange=()=>{e.amount=+ai.value||0;save();drawProject(p);};dA.append(ai);
+    const dC=el("td"),sel=el("select");EXP_CATS.forEach(o=>{const op=el("option",null,o);if(o===e.category)op.selected=true;sel.append(op);});sel.onchange=()=>{e.category=sel.value;logAction("專案",p.name,"修改",`支出分類→${sel.value}（${fmtM(e.amount)}）`);save();drawProject(p);};dC.append(sel);
+    const dA=el("td"),ai=el("input");ai.type="number";ai.value=e.amount||'';ai.onchange=()=>{e.amount=+ai.value||0;logAction("專案",p.name,"修改",`支出金額→${fmtM(e.amount)}（${e.category}）`);save();drawProject(p);};dA.append(ai);
     const dN=el("td",null,`<b>${fmtM(netOf(e.amount))}</b>`);
     const dNo=el("td"),no=el("input");no.type="text";no.value=e.note||'';no.onchange=()=>{e.note=no.value;save();};dNo.append(no);
-    const dX=el("td"),del=el("button","ib rm","✕");del.onclick=()=>{p.expenses=p.expenses.filter(x=>x.id!==e.id);save();drawProject(p);};dX.append(del);
+    const dX=el("td"),del=el("button","ib rm","✕");del.onclick=()=>{logAction("專案",p.name,"刪除",`支出「${e.category} ${fmtM(e.amount)}」`);p.expenses=p.expenses.filter(x=>x.id!==e.id);save();drawProject(p);};dX.append(del);
     tr.append(dD,dC,dA,dN,dNo,dX);bd.append(tr);
   });
   if(!p.expenses.length){const tr=el("tr");tr.innerHTML='<td colspan="6" class="empty">尚無支出，於下方直接新增</td>';bd.append(tr);}
@@ -1109,6 +1214,7 @@ function renderExpTable(m,p){
   const addBtn=el("button","btn mini","＋ 新增");
   addBtn.onclick=()=>{const amt=+na.value||0;if(!amt){na.focus();return;}
     p.expenses.push({id:uid(),date:(parseDate(nd.value)||today()).toISOString(),category:ns.value,amount:amt,note:nn.value||'',by:ME.name||''});
+    logAction("專案",p.name,"新增",`支出「${ns.value} ${fmtM(amt)}」`);
     save();drawProject(p);};
   [nd,ns,na].forEach(x=>{const td=el("td");td.append(x);ar.append(td);});
   ar.append(el("td",null,'<small class="gphase">自動</small>'));
@@ -1232,13 +1338,14 @@ function drawTicket(t){
   m.append(body);
   const hf=el("div","field");hf.innerHTML=`<label>處理方式 / 進度記錄</label>`;
   const ta=el("textarea");ta.rows=4;ta.value=t.handling||"";ta.oninput=()=>{t.handling=ta.value;save();};
+  ta.onchange=()=>{logAction("報修",t.no,"修改","更新處理方式 / 進度記錄");};
   hf.append(ta);m.append(hf);
   // 狀態流
   const sf=el("div","field");sf.innerHTML=`<label>狀態流程</label>`;
   const row=el("div","row");
   TICKET_STATUS.forEach(s=>{
     const b=el("button",(t.status===s?"btn mini":"btn ghost mini"),s);
-    b.onclick=()=>{t.status=s;if(s==="已結案")t.closedAt=today().toISOString();else t.closedAt=null;save();drawTicket(t);renderTickIfActive();};
+    b.onclick=()=>{if(t.status!==s)logAction("報修",t.no,"修改",`狀態→${s}`);t.status=s;if(s==="已結案")t.closedAt=today().toISOString();else t.closedAt=null;save();drawTicket(t);renderTickIfActive();};
     row.append(b);
   });
   sf.append(row);m.append(sf);
@@ -1247,7 +1354,7 @@ function drawTicket(t){
   const bar=el("div","row");bar.style.marginTop="16px";
   if(canEdit()){const eb=el("button","btn ghost mini","✎ 編輯欄位");eb.onclick=()=>openTicketForm(t);bar.append(eb);}
   if(canDelete()){const db=el("button","btn ghost mini","🗑 刪除此工單");db.style.color="#a8331f";
-    db.onclick=()=>{if(confirm(`確定刪除報修單「${t.no}」？`)){DB.tickets=DB.tickets.filter(x=>x.id!==t.id);save();closeModal();}};bar.append(db);}
+    db.onclick=()=>{if(confirm(`確定刪除報修單「${t.no}」？`)){logAction("報修",t.no,"刪除",`刪除報修單「${t.title}」`);DB.tickets=DB.tickets.filter(x=>x.id!==t.id);save();closeModal();}};bar.append(db);}
   m.append(bar);
 }
 function renderTickIfActive(){ if(TAB==="tick")renderTick(); }
@@ -1277,12 +1384,15 @@ function openTicketForm(t){        // t 為 null=新增，否則=編輯
     if(!title.value.trim()){title.focus();return;}
     const projectId=projSel.value==="__NA__"?null:projSel.value;
     if(isNew){
-      DB.tickets.push({id:uid(),no:genTicketNo(ymd(today())),title:title.value.trim(),projectId,
+      const tno=genTicketNo(ymd(today()));
+      DB.tickets.push({id:uid(),no:tno,title:title.value.trim(),projectId,
         device:device.value.trim(),category:catSel.value,severity:sevSel.value,source:src.value.trim()||"電話",
         reportedAt:today().toISOString(),status:"新建",assignee:asg.value.trim(),handling:"",closedAt:null,warranty:warSel.value==="true"});
+      logAction("報修",tno,"新增",`建立報修單「${title.value.trim()}」`);
     }else{
       t.title=title.value.trim();t.projectId=projectId;t.device=device.value.trim();t.category=catSel.value;
       t.severity=sevSel.value;t.source=src.value.trim()||"電話";t.assignee=asg.value.trim();t.warranty=warSel.value==="true";
+      logAction("報修",t.no,"修改",`編輯報修單欄位（主旨：${t.title}）`);
     }
     save();closeModal();
   };
@@ -1290,7 +1400,7 @@ function openTicketForm(t){        // t 為 null=新增，否則=編輯
   bar.append(saveB,cancel);
   if(!isNew && canDelete()){
     const del=el("button","btn","刪除");del.style.cssText="background:var(--red);margin-left:auto";
-    del.onclick=()=>{if(confirm(`確定刪除報修單「${t.no}」？`)){DB.tickets=DB.tickets.filter(x=>x.id!==t.id);save();closeModal();}};
+    del.onclick=()=>{if(confirm(`確定刪除報修單「${t.no}」？`)){logAction("報修",t.no,"刪除",`刪除報修單「${t.title}」`);DB.tickets=DB.tickets.filter(x=>x.id!==t.id);save();closeModal();}};
     bar.append(del);
   }
   m.append(bar);openModal();
@@ -1324,11 +1434,11 @@ function renderData(){
   const impL=el("label",null,"匯入備份：");impL.style.marginTop="14px";
   const imp=el("input");imp.type="file";imp.accept=".json";
   imp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
-    r.onload=()=>{try{DB=JSON.parse(r.result);save();alert("匯入成功");render();}catch(err){alert("檔案格式錯誤");}};r.readAsText(f);};
+    r.onload=()=>{try{DB=JSON.parse(r.result);logAction("系統","全部資料","修改","匯入 JSON 覆蓋全部資料");save();alert("匯入成功");render();}catch(err){alert("檔案格式錯誤");}};r.readAsText(f);};
   c.append(exp,el("div",null,"<br>"),impL,imp);
   if(!cloud.on){   // 只在單機試玩模式顯示；雲端正式環境隱藏，避免誤清共用資料
     const rst=el("button","btn ghost","↺ 重置為範例資料");rst.style.marginTop="12px";
-    rst.onclick=()=>{if(confirm("確定重置？現有資料會清除")){DB=seed();save();render();}};
+    rst.onclick=()=>{if(confirm("確定重置？現有資料會清除")){logAction("系統","全部資料","刪除","重置為範例資料");DB=seed();save();render();}};
     c.append(el("div",null,"<br>"),rst);
   }
   app.append(c);
