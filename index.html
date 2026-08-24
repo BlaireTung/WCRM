@@ -313,7 +313,11 @@ function fmtLog(ts){
 function logAction(scope,target,action,detail){
   const user=(typeof ME!=="undefined"&&ME&&ME.name)?ME.name:'使用者';
   if(cloud.on){
-    try{ cloud.sb.from("logs").insert({user_id:cloud.user?cloud.user.id:null,user_name:user,scope,target:target||'',action,detail:detail||''}); }catch(e){}
+    // 必須 .then() 才會真正送出請求（supabase-js 查詢是 lazy 的）
+    try{
+      cloud.sb.from("logs").insert({user_id:cloud.user?cloud.user.id:null,user_name:user,scope,target:target||'',action,detail:detail||''})
+        .then(({error})=>{ if(error) console.warn("logAction 寫入失敗：",error.message); }, e=>{ console.warn("logAction 例外：",e); });
+    }catch(e){ console.warn("logAction 例外：",e); }
   }else{
     try{ const arr=JSON.parse(localStorage.getItem(LOGKEY)||"[]"); arr.push({ts:new Date().toISOString(),user,scope,target:target||'',action,detail:detail||''}); localStorage.setItem(LOGKEY,JSON.stringify(arr.slice(-2000))); }catch(e){}
   }
