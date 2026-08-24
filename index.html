@@ -303,6 +303,8 @@ function save(){
 }
 /* ============ 資料異動紀錄（audit log；只記新增/修改/刪除，查看不記錄）============ */
 const LOGKEY="husu_log_v1";
+const LOG_KEEP_DAYS=30;                                   // 只保留近 30 天
+const logCutoffISO=()=>new Date(Date.now()-LOG_KEEP_DAYS*86400000).toISOString();
 function fmtLog(ts){
   try{
     const parts=new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date(ts));
@@ -319,15 +321,19 @@ function logAction(scope,target,action,detail){
         .then(({error})=>{ if(error) console.warn("logAction 寫入失敗：",error.message); }, e=>{ console.warn("logAction 例外：",e); });
     }catch(e){ console.warn("logAction 例外：",e); }
   }else{
-    try{ const arr=JSON.parse(localStorage.getItem(LOGKEY)||"[]"); arr.push({ts:new Date().toISOString(),user,scope,target:target||'',action,detail:detail||''}); localStorage.setItem(LOGKEY,JSON.stringify(arr.slice(-2000))); }catch(e){}
+    try{ const cut=logCutoffISO(); let arr=JSON.parse(localStorage.getItem(LOGKEY)||"[]");
+      arr.push({ts:new Date().toISOString(),user,scope,target:target||'',action,detail:detail||''});
+      arr=arr.filter(x=>x.ts>=cut).slice(-2000);          // 清掉 30 天前的舊紀錄
+      localStorage.setItem(LOGKEY,JSON.stringify(arr)); }catch(e){}
   }
 }
 async function loadLogs(){
+  const cut=logCutoffISO();
   if(cloud.on){
-    try{ const {data}=await cloud.sb.from("logs").select("*").order("ts",{ascending:false}).limit(1000);
+    try{ const {data}=await cloud.sb.from("logs").select("*").gte("ts",cut).order("ts",{ascending:false}).limit(2000);
       return (data||[]).map(r=>({ts:r.ts,user:r.user_name,scope:r.scope,target:r.target,action:r.action,detail:r.detail})); }catch(e){ return []; }
   }
-  try{ return JSON.parse(localStorage.getItem(LOGKEY)||"[]").slice().reverse(); }catch(e){ return []; }
+  try{ return JSON.parse(localStorage.getItem(LOGKEY)||"[]").filter(x=>x.ts>=cut).slice().reverse(); }catch(e){ return []; }
 }
 function getCfg(){
   if(CONFIG.url&&CONFIG.anonKey) return {url:CONFIG.url,anonKey:CONFIG.anonKey};
@@ -659,7 +665,7 @@ async function deleteMember(r){
 async function renderLogs(){
   const app=$("#app");app.innerHTML="";
   app.append(el("h2",null,"資料異動紀錄"));
-  app.append(el("div","page-sub","記錄所有「新增／修改／刪除」操作（查看資料不會被記錄）。"+(cloud.on?"　雲端模式：全體共用同一份紀錄。":"　本機模式：僅存在此瀏覽器。")));
+  app.append(el("div","page-sub","記錄所有「新增／修改／刪除」操作（查看資料不會被記錄），僅保留近 30 天。"+(cloud.on?"　雲端模式：全體共用同一份紀錄。":"　本機模式：僅存在此瀏覽器。")));
   const bar=el("div","row");bar.style.cssText="gap:8px;flex-wrap:wrap;margin-bottom:10px";
   const fScope=el("select");["全部類別","專案","報修","帳號","系統"].forEach(o=>fScope.append(el("option",null,o)));
   const fAct=el("select");["全部動作","新增","修改","刪除"].forEach(o=>fAct.append(el("option",null,o)));
