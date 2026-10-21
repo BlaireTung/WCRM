@@ -841,6 +841,8 @@ function ganttFor(p){
 /* ============ 專案明細 modal ============ */
 let subTab="steps";
 function openProject(id){
+  __syncedThisOpen.delete(id);                 // 每次開啟專案都會重新向 Google 試算表同步一次
+  __stepSynced.delete(id);                     // PTSC 步驟也每次開啟重新同步
   const p=DB.projects.find(x=>x.id===id);subTab="steps";drawProject(p);openModal();
 }
 function drawProject(p){
@@ -884,7 +886,29 @@ function drawProject(p){
   m.append(st);
   if(subTab==="steps"){
     numberSteps(p.steps);
-    m.append(el("div","gphase",'名稱／產出文字可直接點改；拖曳左側 ⠿ 把手調整順序、» 設為子項(如 6.1)／« 升回主項、✕ 刪除；最下方可新增。'));
+    // PTSC 步驟：開啟即自動從雲端拉（雲端→系統），和成本/毛利一致
+    if(getStepSheetId() && canEditProject(p)){
+      const sr=el("div","row between");sr.style.cssText="margin:4px 0 8px;flex-wrap:wrap;gap:6px";
+      const si=stepSyncInfo[p.id];
+      const badge=el("span",null,si?si.text:`PTSC 分頁：${p.ptscTab||p.name}`);badge.id="stepSyncBadge";badge.className="badge "+(si?si.cls:"s-grey");badge.style.padding="3px 9px";
+      const rbtn=el("button","btn ghost mini needEdit","↻ 重新讀取");
+      rbtn.onclick=()=>{ __stepSynced.delete(p.id); autoSyncSteps(p); };
+      const wbtn=el("button","btn ghost mini needEdit","⤴ 回寫 PTSC");wbtn.title="把系統步驟寫回 PTSC 雲端表（用你的 Google 帳號）";
+      wbtn.onclick=async()=>{
+        if(!getOAuthClientId()){ alert("尚未設定 OAuth 用戶端 ID。請到「資料/設定」頁的 PTSC 區塊貼上，並確認已在 Google Cloud 開啟 Sheets API。"); return; }
+        if(!confirm(`將把本專案步驟回寫到 PTSC 分頁「${p.ptscTab||p.name}」：\n· 回寫 步驟代碼(A)、執行步驟(B)、實際完成(F)、交付(H)、異常(J)\n· 雲端「預計開始/完成期限」原本空白者，連同 D、E 一起寫\n· 不會寫回 負責人、執行狀態；只填有值的欄位、不清空雲端既有內容\n\n建議先用「複製的分頁」測試。確定回寫？`)) return;
+        wbtn.disabled=true;wbtn.textContent="回寫中…（可能跳 Google 授權視窗）";
+        try{ const r=await writeBackSteps(p);
+          logAction("專案",p.name,"修改",`回寫 PTSC 試算表（更新 ${r.updated} 格、新增 ${r.appended} 列）`);
+          alert(`回寫完成：更新 ${r.updated} 格、新增 ${r.appended} 列。將重新讀取雲端以確認。`);
+          __stepSynced.delete(p.id); autoSyncSteps(p);
+        }catch(e){ alert("回寫失敗："+e.message); }
+        finally{ wbtn.disabled=false;wbtn.textContent="⤴ 回寫 PTSC"; }
+      };
+      sr.append(badge,rbtn,wbtn);m.append(sr);
+      if(getOAuthClientId()) ensureGis().catch(()=>{});   // 預載 Google 登入元件，讓按鈕點下即可授權
+    }
+    m.append(el("div","gphase",'名稱／交付／異常文字可直接點改；拖曳左側 ⠿ 把手調整順序、» 設為子項(如 6.1)／« 升回主項、✕ 刪除；最下方可新增。開啟此頁會自動從 PTSC 雲端表更新（手動改的步驟保留）。'));
     const list=el("div","steplist");
     let dragIdx=null;
     const clearMarks=()=>list.querySelectorAll(".step").forEach(x=>x.classList.remove("dropbefore","dropafter","dragging"));
@@ -912,13 +936,19 @@ function drawProject(p){
       const nm=el("b","edt",s.name);nm.contentEditable=true;
       nm.onblur=()=>{s.name=nm.textContent.trim()||s.name;save();};
       const line2=el("small");
-      const docsSpan=el("span","edt",s.docs.join('、')||'（無）');docsSpan.contentEditable=true;
-      docsSpan.onblur=()=>{s.docs=docsSpan.textContent.split(/[、,，]/).map(x=>x.trim()).filter(Boolean);save();};
-      line2.append(document.createTextNode(`負責：${s.owner}　·　產出：`),docsSpan);
+      const delv0 = (s.deliverStd!=null) ? s.deliverStd : (s.docs||[]).join('、');
+      const delSpan=el("span","edt",delv0||'（無）');delSpan.contentEditable=true;   // 交付標準(H)
+      delSpan.onblur=()=>{const t=delSpan.textContent.trim();s.deliverStd=t;s.docs=t?t.split(/[、,，]/).map(x=>x.trim()).filter(Boolean):[];save();};
+      line2.append(document.createTextNode(`負責：${s.owner}　·　交付：`),delSpan);
+      // 異常／改善計畫(J)
+      const line3=el("small");line3.style.display="block";
+      const issSpan=el("span","edt",s.issue||'（無）');issSpan.contentEditable=true;
+      issSpan.onblur=()=>{s.issue=issSpan.textContent.trim()==='（無）'?'':issSpan.textContent.trim();save();};
+      line3.append(document.createTextNode('異常／改善：'),issSpan);
       info.append(nm);
       if(s.sign)info.insertAdjacentHTML('beforeend','<span class="tag">需客戶簽回</span>');
       if(late)info.insertAdjacentHTML('beforeend','<span class="badge s-red" style="margin-left:6px;padding:1px 7px">逾期</span>');
-      info.append(el("br"),line2);
+      info.append(el("br"),line2,line3);
       // 計畫起訖日（皆可調整）
       const planRow=el("small");planRow.style.cssText="display:flex;gap:5px;align-items:center;margin-top:4px;flex-wrap:wrap";
       planRow.append(document.createTextNode("計畫"));
@@ -962,6 +992,7 @@ function drawProject(p){
       save();drawProject(p);
     };
     addBox.append(addBtn);m.append(addBox);
+    if(getStepSheetId()) autoSyncSteps(p);   // 開啟步驟頁即自動從 PTSC 拉
   }
   else if(subTab==="gantt"){ m.append(ganttFor(p)); }
   else if(subTab==="cost"){ renderCostTab(m,p); }
@@ -1058,6 +1089,9 @@ async function openProjectForm(p){        // p 為 null=新增，否則=編輯
   m.append(fld("專案名稱 ✱（必填）",name));
   const r=el("div","f2");r.append(fld("客戶",cust),fld(pmLocked?"PM（僅 admin 可變更）":"PM ✱（必填）",pmField));m.append(r);
   const r2=el("div","f2");r2.append(fld("專案開始日",startBox),fld("驗收日（結束）",dueBox));m.append(r2);
+  // PTSC 雲端分頁名稱（步驟同步用；留空則用專案名稱去找）
+  const ptscIn=el("input");ptscIn.value=p?.ptscTab||"";ptscIn.placeholder="此案在 PTSC 步驟表的分頁名（例：聯電4）；留空則用專案名稱";
+  m.append(fld("PTSC 雲端分頁名稱（步驟同步用，可留空）",ptscIn));
   let autoChk=null;
   if(isNew){
     autoChk=el("input");autoChk.type="checkbox";autoChk.checked=true;autoChk.style.width="auto";autoChk.id="autoSteps";
@@ -1076,7 +1110,7 @@ async function openProjectForm(p){        // p 為 null=新增，否則=編輯
     if(isNew){
       const nm=name.value.trim();
       const useSteps=autoChk?autoChk.checked:true;
-      DB.projects.push({id:uid(),name:nm,customer:cust.value.trim(),pm:getPm(),
+      DB.projects.push({id:uid(),name:nm,customer:cust.value.trim(),pm:getPm(),ptscTab:ptscIn.value.trim(),
         startDate:s.toISOString(),dueDate:du.toISOString(),steps:useSteps?buildSteps(s,du):[],meetings:[],expenses:[],shipments:[]});
       logAction("專案",nm,"新增",`建立專案（PM：${getPm()}${useSteps?"；自動套用13步驟":"；未套用步驟範本"}）`);
     }else{
@@ -1086,7 +1120,8 @@ async function openProjectForm(p){        // p 為 null=新增，否則=編輯
       if((p.pm||'')!==getPm())ch.push(`PM→${getPm()}`);
       if((p.startDate||'').slice(0,10)!==s.toISOString().slice(0,10))ch.push(`開始日→${s.toISOString().slice(0,10)}`);
       if((p.dueDate||'').slice(0,10)!==du.toISOString().slice(0,10))ch.push(`驗收日→${du.toISOString().slice(0,10)}`);
-      p.name=name.value.trim();p.customer=cust.value.trim();p.pm=getPm();
+      if((p.ptscTab||'')!==ptscIn.value.trim())ch.push(`PTSC分頁→${ptscIn.value.trim()||'(清空)'}`);
+      p.name=name.value.trim();p.customer=cust.value.trim();p.pm=getPm();p.ptscTab=ptscIn.value.trim();
       p.startDate=s.toISOString();p.dueDate=du.toISOString();
       if(ch.length) logAction("專案",p.name,"修改",`專案資料（${ch.join("、")}）`);
     }
@@ -1132,11 +1167,266 @@ function projCost(p){
   exps.forEach(e=>{byCatNet[e.category]=(byCatNet[e.category]||0)+netOf(e.amount);});
   return {spentGross,spentNet,revenue,equipBudget,opexBudget,equipSpentNet,opexSpentNet,equipRemain,opexRemain,gross,margin,byCatNet,exps};
 }
+/* ============ Google 試算表同步（唯讀 gviz，不改動原檔）============ */
+const SHEETKEY="husu_sheet_v1";
+const SHEET_DEFAULT_ID="1V3Q3W9EiLDdt7BAnK4Pq91NIF1cPWo3oeP85ckrzBQo";
+function getSheetId(){ try{ return (localStorage.getItem(SHEETKEY)||SHEET_DEFAULT_ID).trim(); }catch(e){ return SHEET_DEFAULT_ID; } }
+function setSheetId(id){ try{ localStorage.setItem(SHEETKEY,(id||"").trim()); }catch(e){} }
+let __gvizN=0;
+function gvizFetch(sheetId, tabName, timeoutMs=15000){
+  return new Promise((resolve,reject)=>{
+    const cb="__gvizCb_"+(++__gvizN);
+    const s=document.createElement("script"); let done=false;
+    const cleanup=()=>{ try{delete window[cb];}catch(e){try{window[cb]=undefined;}catch(_){}} if(s.parentNode)s.parentNode.removeChild(s); };
+    const fin=(fn,arg)=>{ if(done)return; done=true; clearTimeout(t); cleanup(); fn(arg); };
+    const t=setTimeout(()=>fin(reject,new Error("連線逾時")),timeoutMs);
+    window[cb]=(resp)=>fin(resolve,resp);
+    s.onerror=()=>fin(reject,new Error("讀不到（分頁不存在或未開放檢視）"));
+    s.src=`https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json;responseHandler:${cb}&headers=0&sheet=${encodeURIComponent(tabName)}`;
+    document.head.appendChild(s);
+  });
+}
+function gnum(x){ if(x==null)return null; if(typeof x==='number')return x; const n=parseFloat(String(x).replace(/[^0-9.\-]/g,'')); return isNaN(n)?null:n; }
+function gdate(cell){ if(!cell)return null; const v=cell.v,f=cell.f;
+  if(typeof v==='string'){ const m=v.match(/Date\((\d+),(\d+),(\d+)/); if(m) return new Date(Date.UTC(+m[1],+m[2],+m[3])); }
+  return parseDate(f||v)||null;
+}
+function catOfItem(t){ t=String(t||""); return /交通|車資|車費|高鐵|計程|停車|差旅|住宿|機票|油資|油錢|過路|火車|客運/.test(t)?"差旅費":"雜費"; }
+function parseSheetProject(resp){
+  const rows=(resp&&resp.table&&resp.table.rows)||[];
+  const grid=rows.map(r=>(r&&r.c)||[]);
+  const cell=(r,c)=>{ const row=grid[r]; return row?row[c]:null; };
+  const v=(r,c)=>{ const x=cell(r,c); return x?x.v:null; };
+  const findRow=(label)=>grid.findIndex(row=>row&&row[0]&&String(row[0].v).trim()===label);
+  const out={ contractAmount:null, equipBudget:null, opexBudget:null, expenses:[] };
+  const aR=findRow("專案金額"), bR=findRow("預算申請");
+  if(aR>=0){ out.contractAmount=gnum(v(aR,1)); out.equipBudget=gnum(v(aR,4)); }
+  if(bR>=0){ out.opexBudget=gnum(v(bR,4)); }
+  const hR=grid.findIndex(row=>row&&row[0]&&String(row[0].v).trim()==="日期"&&row[3]&&String(row[3].v).trim()==="採購費用");
+  if(hR>=0){
+    let ord=0;
+    for(let r=hR+1;r<grid.length;r++){
+      const no=v(r,1), item=v(r,2);
+      const nos=no==null?"":String(no).trim(), its=item==null?"":String(item).trim();
+      if(!nos && !its) continue;                         // 略過加總列（無單號、無項目，例如第6列的欄位加總）
+      if(/^(合計|小計|總計|加總)$/.test(its)) continue;   // 略過文字為「合計/小計」的彙總列
+      const pur=gnum(v(r,3)), oth=gnum(v(r,4));
+      let net=null, cat=null;
+      if(pur&&pur>0){ net=pur; cat="設備"; }
+      else if(oth&&oth>0){ net=oth; cat=catOfItem(item); }
+      else continue;
+      out.expenses.push({ date:gdate(cell(r,0)), no, item:item||"", net, category:cat, ord:ord++ });  // ord 記錄雲端表列序
+    }
+  }
+  return out;
+}
+const __sigExp=arr=>(arr||[]).filter(e=>e.src==="gsheet").map(e=>`${(e.date||'').slice(0,10)}|${e.category}|${e.amount}|${e.note}`).sort().join("¦");
+function applySheet(p,parsed){
+  const ch=[];
+  if(parsed.contractAmount!=null && (+p.contractAmount||0)!==parsed.contractAmount){ p.contractAmount=parsed.contractAmount; ch.push("合約金額"); }
+  if(parsed.equipBudget!=null && (+p.equipBudget||0)!==parsed.equipBudget){ p.equipBudget=parsed.equipBudget; ch.push("採購預算"); }
+  if(parsed.opexBudget!=null && (+p.opexBudget||0)!==parsed.opexBudget){ p.opexBudget=parsed.opexBudget; ch.push("其他費用預算"); }
+  if(!p.expenses)p.expenses=[];
+  const before=__sigExp(p.expenses);
+  const manual=p.expenses.filter(e=>e.src!=="gsheet");
+  const hadGsheet=p.expenses.some(e=>e.src==="gsheet");
+  const imported=parsed.expenses.map(e=>({ id:uid(), date:(e.date||today()).toISOString(), category:e.category, amount:Math.round(e.net*TAX), note:(e.item||"")+(e.no?`（${e.no}）`:""), by:"Google試算表", src:"gsheet", ord:e.ord }));
+  if(imported.length>0 || hadGsheet){ p.expenses=manual.concat(imported); }
+  const after=__sigExp(p.expenses);
+  return { ch, n:imported.length, changed: ch.length>0 || before!==after };
+}
+async function syncProjectFromSheet(p){
+  const resp=await gvizFetch(getSheetId(), p.name);
+  if(resp&&resp.status==="error"){ throw new Error((resp.errors&&resp.errors[0]&&(resp.errors[0].detailed_message||resp.errors[0].message))||"分頁讀取錯誤"); }
+  return applySheet(p, parseSheetProject(resp));
+}
+const syncInfo={}; const __syncedThisOpen=new Set();
+function fmtHM(){ const d=new Date(),z=n=>String(n).padStart(2,'0'); return z(d.getHours())+":"+z(d.getMinutes()); }
+function setSync(p,cls,text){ syncInfo[p.id]={cls,text}; const b=$("#syncBadge"); if(b){ b.className="badge "+cls; b.textContent=text; } }
+async function autoSyncCost(p){
+  if(!getSheetId()||!(costVisible()&&canEditProject(p))) return;
+  if(__syncedThisOpen.has(p.id)) return;
+  __syncedThisOpen.add(p.id);
+  setSync(p,"s-amber","⟳ 與 Google 試算表同步中…");
+  try{
+    const r=await syncProjectFromSheet(p);
+    if(r.changed){
+      setSync(p,"s-green",`✓ 已同步（${fmtHM()}）`);
+      logAction("專案",p.name,"修改",`Google 試算表同步（${r.ch.join("、")||"金額無異動"}；支出 ${r.n} 筆）`);
+      save();
+      if($("#modalBg").classList.contains("on")) drawProject(p);
+    }else{ setSync(p,"s-green",`✓ 已是最新（${fmtHM()}）`); }
+  }catch(e){ setSync(p,"s-red","⚠ 同步失敗："+e.message); }
+}
+async function syncAllFromSheet(statusEl){
+  const id=getSheetId(); if(!id){ if(statusEl)statusEl.textContent="尚未設定試算表 ID。"; return; }
+  const targets=DB.projects.filter(p=>costVisible()&&canEditProject(p));
+  if(!targets.length){ if(statusEl)statusEl.textContent="沒有你有權同步的專案。"; return; }
+  let ok=0, nf=0, er=0; const notFound=[];
+  for(const p of targets){
+    if(statusEl) statusEl.textContent=`同步中… ${ok+nf+er+1}/${targets.length}　（${p.name}）`;
+    try{ await syncProjectFromSheet(p); ok++; }
+    catch(e){ if(/讀不到|不存在|開放|讀取錯誤/.test(e.message)){ nf++; notFound.push(p.name); } else { er++; } }
+  }
+  save();
+  logAction("系統","全部專案","修改",`Google 試算表批次同步：成功 ${ok}、未對應 ${nf}、錯誤 ${er}`);
+  if(statusEl) statusEl.innerHTML=`完成：成功同步 <b>${ok}</b> 件；未找到同名分頁 <b>${nf}</b> 件${notFound.length?`（${esc(notFound.join("、"))}）`:""}；錯誤 <b>${er}</b> 件。`;
+}
+
+/* ============ PTSC 步驟表同步（唯讀；階段/步驟/交付/負責人/時程/狀態）============ */
+const STEPSHEETKEY="husu_stepsheet_v1";
+const STEPSHEET_DEFAULT_ID="1WZSHmqYrGUhzzHileYSZWfnqO86VgZSuxplrd7P0xKU";
+function getStepSheetId(){ try{ return (localStorage.getItem(STEPSHEETKEY)||STEPSHEET_DEFAULT_ID).trim(); }catch(e){ return STEPSHEET_DEFAULT_ID; } }
+function setStepSheetId(id){ try{ localStorage.setItem(STEPSHEETKEY,(id||"").trim()); }catch(e){} }
+function iso(d){ return d? d.toISOString() : null; }
+function mapStepStatus(g){ g=String(g||"").trim();
+  if(/已完成|完成/.test(g)) return "已完成";
+  if(/進行|執行中/.test(g)) return "進行中";
+  if(/簽回/.test(g)) return "待客戶簽回";
+  if(/逾期/.test(g)) return "進行中";
+  return "未開始";
+}
+function matchPhase(a){ const t=String(a||"").replace(/^[0-9.\s]+/,"").trim();
+  const hit=PHASES.find(p=>t.includes(p)||p.includes(t)); return hit||t||"其他"; }
+function parseStepSheet(resp){
+  const rows=(resp&&resp.table&&resp.table.rows)||[];
+  const grid=rows.map(r=>(r&&r.c)||[]);
+  const v=(r,c)=>{ const row=grid[r]; const x=row?row[c]:null; return x?x.v:null; };
+  const cell=(r,c)=>{ const row=grid[r]; return row?row[c]:null; };
+  const txt=x=>x==null?"":String(x).trim();
+  let hR=grid.findIndex(row=>row && ((row[1]&&txt(row[1].v)==="執行步驟")||(row[0]&&txt(row[0].v)==="序")));
+  if(hR<0) return [];
+  const steps=[]; let phase="其他";
+  for(let r=hR+1;r<grid.length;r++){
+    const as=txt(v(r,0)), bs=txt(v(r,1));
+    if(!bs && /階段/.test(as)){ phase=matchPhase(as); continue; }   // 階段分隔列
+    if(!as && !bs) continue;
+    const code=(/^\d/.test(as) && as!==bs)?as:"";
+    const H=txt(v(r,7)), J=txt(v(r,9));                             // H 交付標準、J 異常/改善
+    const hadDates=!!(txt(v(r,3)) && txt(v(r,4)));                  // 雲端 D(預計開始)+E(完成期限) 是否都已填
+    steps.push({ id:uid(), src:"gsheet", _row:r+1, _hadDates:hadDates,   // _row：對應雲端列號（寫回用）
+      phase, codeA:code, taskB:bs, name:[code,bs].filter(Boolean).join("｜")||as,
+      owner:txt(v(r,2)),
+      planStart:iso(gdate(cell(r,3))), planEnd:iso(gdate(cell(r,4))), actualStart:null, actualEnd:iso(gdate(cell(r,5))),
+      status:mapStepStatus(v(r,6)), deliverStd:H, issue:J,
+      docs:H?[H]:[], sign:false, sub:false });
+  }
+  return steps;
+}
+function applyStepSheet(p,steps){
+  if(!p.steps) p.steps=[];
+  const base=p.startDate?new Date(p.startDate):today();
+  steps.forEach(s=>{ if(!s.planStart)s.planStart=base.toISOString(); if(!s.planEnd)s.planEnd=s.planStart; });
+  const sig=arr=>JSON.stringify((arr||[]).filter(s=>s.src==="gsheet").map(s=>[s.phase,s.name,s.owner,s.planStart,s.planEnd,s.actualEnd,s.status,s.deliverStd,s.issue]));
+  const before=sig(p.steps);
+  const manual=p.steps.filter(s=>s.src!=="gsheet");                 // 保留系統內手動新增的步驟
+  const hadG=p.steps.some(s=>s.src==="gsheet");
+  if(steps.length>0 || hadG){ p.steps=steps.concat(manual); }       // 雲端步驟在前、手動步驟在後
+  return { n:steps.length, changed: before!==sig(p.steps), empty:steps.length===0 };
+}
+async function syncStepsFromSheet(p){
+  const tab=(p.ptscTab&&p.ptscTab.trim())?p.ptscTab.trim():p.name;
+  const resp=await gvizFetch(getStepSheetId(), tab);
+  if(resp&&resp.status==="error"){ throw new Error((resp.errors&&resp.errors[0]&&(resp.errors[0].detailed_message||resp.errors[0].message))||"分頁讀取錯誤"); }
+  return applyStepSheet(p, parseStepSheet(resp));
+}
+const stepSyncInfo={}; const __stepSynced=new Set();
+function setStepSync(p,cls,text){ stepSyncInfo[p.id]={cls,text}; const b=$("#stepSyncBadge"); if(b){ b.className="badge "+cls; b.textContent=text; } }
+async function autoSyncSteps(p){
+  if(!getStepSheetId()||!canEditProject(p)) return;
+  if(__stepSynced.has(p.id)) return;
+  __stepSynced.add(p.id);
+  setStepSync(p,"s-amber","⟳ 從 PTSC 同步中…");
+  try{
+    const r=await syncStepsFromSheet(p);
+    if(r.empty){ setStepSync(p,"s-red",`⚠ 讀不到分頁「${p.ptscTab||p.name}」或無步驟`); return; }
+    if(r.changed){
+      setStepSync(p,"s-green",`✓ 已從 PTSC 同步（${fmtHM()}）`);
+      logAction("專案",p.name,"修改",`從 PTSC 自動同步步驟（${r.n} 步）`);
+      save();
+      if(subTab==="steps" && $("#modalBg").classList.contains("on")) drawProject(p);
+    }else{ setStepSync(p,"s-green",`✓ 已是最新（${fmtHM()}）`); }
+  }catch(e){ setStepSync(p,"s-red","⚠ 同步失敗："+e.message); }
+}
+/* ---- 回寫 PTSC（系統→雲端；OAuth 各自帳號；需在 https 網站使用）---- */
+const OAUTHKEY="husu_oauth_cid";
+function getOAuthClientId(){ try{ return (localStorage.getItem(OAUTHKEY)||(CONFIG&&CONFIG.oauthClientId)||"").trim(); }catch(e){ return ""; } }
+function setOAuthClientId(v){ try{ localStorage.setItem(OAUTHKEY,(v||"").trim()); }catch(e){} }
+let __gisToken=null, __gisExp=0;
+function ensureGis(){ return new Promise((res,rej)=>{
+  if(window.google&&google.accounts&&google.accounts.oauth2) return res();
+  let s=document.getElementById("gisScript");
+  if(s){ s.addEventListener("load",()=>res()); s.addEventListener("error",()=>rej(new Error("無法載入 Google 登入元件"))); return; }
+  s=document.createElement("script"); s.id="gisScript"; s.src="https://accounts.google.com/gsi/client"; s.async=true; s.defer=true;
+  s.onload=()=>res(); s.onerror=()=>rej(new Error("無法載入 Google 登入元件（需在 https 網站使用）"));
+  document.head.appendChild(s);
+}); }
+async function getWriteToken(){
+  const cid=getOAuthClientId(); if(!cid) throw new Error("尚未設定 OAuth 用戶端 ID（資料/設定頁）");
+  await ensureGis();
+  if(__gisToken && Date.now()<__gisExp-60000) return __gisToken;
+  return new Promise((res,rej)=>{ try{
+    const tc=google.accounts.oauth2.initTokenClient({ client_id:cid, scope:"https://www.googleapis.com/auth/spreadsheets",
+      callback:(r)=>{ if(r&&r.error){ rej(new Error("授權失敗："+r.error)); return; } __gisToken=r.access_token; __gisExp=Date.now()+((r.expires_in||3600)*1000); res(__gisToken); } });
+    tc.requestAccessToken({prompt:""});
+  }catch(e){ rej(e); } });
+}
+function stepAB(s){ const nm=s.name||""; const i=nm.indexOf("｜");
+  if(i>=0) return { A:nm.slice(0,i).trim(), B:nm.slice(i+1).trim() };
+  return { A:(s.codeA||"").trim(), B:(s.taskB||nm).trim() }; }
+function colL(n){ let s=""; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
+function fmtSheetDate(isoStr){ if(!isoStr)return ""; const d=new Date(isoStr); return d.getUTCFullYear()+"/"+(d.getUTCMonth()+1)+"/"+d.getUTCDate(); }
+async function writeBackSteps(p){
+  const token=await getWriteToken();
+  const sid=getStepSheetId();
+  const tab=(p.ptscTab&&p.ptscTab.trim())?p.ptscTab.trim():p.name;
+  const q=t=>"'"+String(t).replace(/'/g,"''")+"'";
+  const data=[], appends=[];
+  const put=(row,c,val)=>{ if(val!=="" && val!=null) data.push({range:`${q(tab)}!${colL(c)}${row}`, values:[[val]]}); };
+  for(const s of p.steps){
+    if(s._row==null){ appends.push(s); continue; }          // 系統新增、雲端沒有的 → 插入新列
+    const ab=stepAB(s), row=s._row;
+    put(row,0,ab.A); put(row,1,ab.B);                        // A 步驟、B 執行步驟
+    put(row,5,fmtSheetDate(s.actualEnd));                    // F 實際完成
+    put(row,7,s.deliverStd||"");                             // H 交付標準
+    put(row,9,s.issue||"");                                  // J 異常/改善
+    if(!s._hadDates){ put(row,3,fmtSheetDate(s.planStart)); put(row,4,fmtSheetDate(s.planEnd)); } // 雲端 D/E 原本空才寫
+    // 不回寫 C(負責人)、G(狀態)
+  }
+  if(data.length){
+    const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`,{
+      method:"POST", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+      body:JSON.stringify({valueInputOption:"USER_ENTERED", data}) });
+    if(!r.ok) throw new Error("更新失敗 "+r.status+"："+(await r.text()).slice(0,180));
+  }
+  let appended=0;
+  for(const s of appends){
+    const ab=stepAB(s);
+    const vals=[ab.A, ab.B, "", fmtSheetDate(s.planStart), fmtSheetDate(s.planEnd), fmtSheetDate(s.actualEnd), "", s.deliverStd||"", "", s.issue||""];
+    const rng=encodeURIComponent(`${q(tab)}!A1`);
+    const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${rng}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,{
+      method:"POST", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+      body:JSON.stringify({values:[vals]}) });
+    if(!r.ok) throw new Error("插入失敗 "+r.status+"："+(await r.text()).slice(0,180));
+    appended++;
+  }
+  return { updated:data.length, appended };
+}
+
 function renderCostTab(m,p){
   if(!p.expenses)p.expenses=[];
   if(!p.shipments)p.shipments=[];
   const c=projCost(p);
   m.append(el("div","gphase","金額一律以「未稅（不含 5%）」計算毛利；支出請輸入實付含稅金額，系統自動換算未稅額。"));
+  // Google 試算表同步狀態 + 手動同步
+  if(getSheetId()){
+    const sr=el("div","row between");sr.style.cssText="margin:6px 0;flex-wrap:wrap;gap:6px";
+    const si=syncInfo[p.id];
+    const badge=el("span",null,si?si.text:"Google 試算表：待同步");badge.id="syncBadge";badge.className="badge "+(si?si.cls:"s-grey");badge.style.padding="3px 9px";
+    const sb=el("button","btn ghost mini needEdit","↻ 從 Google 試算表同步此專案");
+    sb.onclick=()=>{ __syncedThisOpen.delete(p.id); autoSyncCost(p); };
+    sr.append(badge,sb);m.append(sr);
+  }
   // 設定：收入 + 兩個預算
   const setBox=el("div","card");setBox.style.cssText="box-shadow:none;background:#fafcfd;padding:12px 14px;margin:12px 0";
   setBox.innerHTML=`<div class="f3">
@@ -1168,6 +1458,8 @@ function renderCostTab(m,p){
   renderShipTable(m,p);
   // 支出明細（可直接編輯 + 下方直接新增）
   renderExpTable(m,p);
+  // 開啟成本頁即自動同步（唯讀；僅有權者寫入）
+  if(getSheetId()) autoSyncCost(p);
 }
 function renderShipTable(m,p){
   m.append(el("div","row between",'<b>硬體設備出貨明細</b>'));
@@ -1204,7 +1496,13 @@ function renderExpTable(m,p){
   const tb=el("table");
   tb.innerHTML="<thead><tr><th style='width:140px'>日期</th><th style='width:110px'>分類</th><th style='width:120px'>實付金額(含稅)</th><th style='width:110px'>未稅額</th><th>說明</th><th style='width:34px'></th></tr></thead>";
   const bd=el("tbody");
-  p.expenses.slice().sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(e=>{
+  // 排序比照雲端表：有 ord 者（Google 匯入）依雲端列序；其餘（手動）排後面、依日期新到舊
+  p.expenses.slice().sort((a,b)=>{
+    const ao=(a.ord==null?1:0), bo=(b.ord==null?1:0);
+    if(ao!==bo) return ao-bo;                       // 有 ord 的排前
+    if(a.ord!=null && b.ord!=null) return a.ord-b.ord; // 雲端列序
+    return new Date(b.date)-new Date(a.date);       // 手動：新到舊
+  }).forEach(e=>{
     const tr=el("tr");
     const dD=el("td"),di=mkDateInput(e.date,(d)=>{e.date=d?d.toISOString():e.date;save();});dD.append(di);
     const dC=el("td"),sel=el("select");EXP_CATS.forEach(o=>{const op=el("option",null,o);if(o===e.category)op.selected=true;sel.append(op);});sel.onchange=()=>{e.category=sel.value;logAction("專案",p.name,"修改",`支出分類→${sel.value}（${fmtM(e.amount)}）`);save();drawProject(p);};dC.append(sel);
@@ -1436,6 +1734,30 @@ function renderData(){
   if(cloud.on){ const lo=el("button","btn ghost","登出");lo.style.marginLeft="8px";
     lo.onclick=async()=>{await cloud.sb.auth.signOut();location.reload();}; cc.append(lo); }
   app.append(cc);
+  // Google 試算表同步（成本/毛利）—— 僅 admin/PM 可見
+  if(costVisible()){
+    const gs=el("div","card");
+    gs.innerHTML=`<div class="row between"><b>Google 試算表同步（成本 / 毛利）</b></div>
+      <div class="gphase" style="margin-top:8px;line-height:1.8">以「分頁名稱＝專案名稱」對應，唯讀抓取合約金額、採購預算、其他費用與支出明細；<b>不會改動你的試算表</b>。開啟任一專案的「成本/毛利」頁時會自動同步該專案；下方可一次同步全部。試算表需設為「知道連結者可檢視」。</div>`;
+    const idLab=el("label",null,"試算表 ID（網址 /d/ 與 /edit 之間那段）");idLab.style.marginTop="10px";
+    const idIn=el("input");idIn.value=getSheetId();idIn.style.width="100%";idIn.placeholder="例：1V3Q3W9EiLDdt7BAnK4Pq91NIF1cPWo3oeP85ckrzBQo";
+    idIn.onchange=()=>{ setSheetId(idIn.value); };
+    const sbtn=el("button","btn","⟳ 立即同步全部專案");sbtn.style.marginTop="12px";
+    const st=el("div","gphase");st.style.marginTop="8px";
+    sbtn.onclick=async()=>{ setSheetId(idIn.value); sbtn.disabled=true; sbtn.textContent="同步中…"; await syncAllFromSheet(st); sbtn.disabled=false; sbtn.textContent="⟳ 立即同步全部專案"; };
+    gs.append(idLab,idIn,sbtn,st);
+    // PTSC 步驟表 ID
+    const pLab=el("label",null,"PTSC 步驟表 ID（唯讀同步步驟用）");pLab.style.marginTop="16px";
+    const pIn=el("input");pIn.value=getStepSheetId();pIn.style.width="100%";pIn.placeholder="例：1WZSHmqYrGUhzzHileYSZWfnqO86VgZSuxplrd7P0xKU";
+    pIn.onchange=()=>{ setStepSheetId(pIn.value); };
+    gs.append(pLab,pIn,el("div","gphase",'開啟任一專案的「步驟 / 交付」頁時，會自動從 PTSC 雲端表更新步驟（階段／步驟／負責人／交付H／異常J／時程／狀態），手動改的步驟保留；對應分頁由各專案的「PTSC 雲端分頁名稱」決定（留空則用專案名稱）。此表同樣需設為「知道連結者可檢視」。'));
+    // 回寫用 OAuth 用戶端 ID（每人用自己的 Google 帳號寫回）
+    const oLab=el("label",null,"回寫用 Google OAuth 用戶端 ID（步驟回寫 PTSC 用）");oLab.style.marginTop="16px";
+    const oIn=el("input");oIn.value=getOAuthClientId();oIn.style.width="100%";oIn.placeholder="例：xxxxxxxx.apps.googleusercontent.com";
+    oIn.onchange=()=>{ setOAuthClientId(oIn.value); };
+    gs.append(oLab,oIn,el("div","gphase",'回寫（系統→雲端）在各專案「步驟/交付」頁按「⤴ 回寫 PTSC」，會跳出 Google 授權、以你自己的帳號寫入（雲端編輯者顯示為你本人）。需：1) 在 Google Cloud 建立 OAuth 用戶端 ID（網頁應用程式），把你的網站網址加入「已授權的 JavaScript 來源」；2) 開啟 Sheets API；3) 把用戶端 ID 貼在此。回寫只在 https 網站（如 GitHub Pages）可用，本機檔案不支援。建議先用複製的分頁測試。'));
+    app.append(gs);
+  }
   const c=el("div","card");
   const exp=el("button","btn","⬇ 匯出備份 (JSON)");exp.onclick=()=>{
     const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});
