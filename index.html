@@ -978,6 +978,11 @@ function drawProject(p){
       const ds=el("div");ds.style.cssText="width:150px;flex:none";ds.append(mkDateInput(s.planStart,(d)=>{ if(d){s.planStart=d.toISOString();} save();drawProject(p); }));
       const de=el("div");de.style.cssText="width:150px;flex:none";de.append(mkDateInput(s.planEnd,(d)=>{ if(d){s.planEnd=d.toISOString();} save();drawProject(p); }));
       planRow.append(ds,document.createTextNode("~"),de);
+      // 實際完成日（可回寫雲端 F 欄）
+      planRow.append(document.createTextNode("　實際完成"));
+      const da=el("div");da.style.cssText="width:150px;flex:none";
+      da.append(mkDateInput(s.actualEnd,(d)=>{ s.actualEnd=d?d.toISOString():null; save();drawProject(p); }));
+      planRow.append(da);
       info.append(planRow);
       r.append(info);
       const sel=el("select");STEP_STATUS.forEach(o=>{const op=el("option",null,o);if(o===s.status)op.selected=true;sel.append(op);});
@@ -1457,23 +1462,31 @@ async function writeBackSteps(p){
   // 3) 更新既有列
   if(data.length) await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`,token,
     {method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({valueInputOption:"USER_ENTERED",data})});
-  // 4) 新增步驟：在步驟表最後一列之後插入 N 列，再寫入（需要 gid）
+  // 4) 新增步驟：依步驟代碼插到「正確位置」（不是放最後）
   let appended=0;
   if(toInsert.length){
     const meta=await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}?fields=sheets.properties(sheetId,title)`,token);
     const sp=(meta.sheets||[]).find(x=>x.properties&&x.properties.title===tab);
     if(!sp) throw new Error("找不到分頁「"+tab+"」的 gid");
-    const gid=sp.properties.sheetId, N=toInsert.length;
-    await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`,token,
-      {method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
-       body:JSON.stringify({requests:[{insertDimension:{range:{sheetId:gid,dimension:"ROWS",startIndex:lastStepRow,endIndex:lastStepRow+N},inheritFromBefore:true}}]})});
-    const data2=[];
-    toInsert.forEach((s,k)=>{ const row=lastStepRow+1+k, ab=stepAB(s);
-      const pv=(c,val)=>{ if(val!=="" && val!=null) data2.push({range:`${q(tab)}!${colL(c)}${row}`, values:[[val]]}); };
-      pv(0,ab.A);pv(1,ab.B);pv(3,fmtSheetDate(s.planStart));pv(4,fmtSheetDate(s.planEnd));pv(5,fmtSheetDate(s.actualEnd));pv(7,s.deliverStd||"");pv(9,s.issue||""); });
-    if(data2.length) await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`,token,
-      {method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({valueInputOption:"USER_ENTERED",data:data2})});
-    appended=N;
+    const gid=sp.properties.sheetId;
+    const keyOf=str=>{ const m=String(str||"").match(/(\d+)\.(\d+)/); return m?[+m[1],+m[2]]:[99,99]; };
+    const cmp=(a,b)=>a[0]-b[0]||a[1]-b[1];
+    // 每筆新步驟要插在「代碼 <= 自己的最後一列」之後；若都沒有則接在表頭之後（成為第一列步驟）
+    toInsert.forEach(s=>{ const k=keyOf(stepAB(s).A); let after=hR+1;    // hR 為表頭 0-based；表頭實際列=hR+1
+      sheetSteps.forEach(ss=>{ if(cmp(keyOf(ss.A),k)<=0 && ss.row>after) after=ss.row; });
+      s.__after=after; });
+    toInsert.sort((a,b)=>b.__after-a.__after);                          // 由下而上插入，列號不互相位移
+    const hdr={Authorization:"Bearer "+token,"Content-Type":"application/json"};
+    for(const s of toInsert){
+      await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`,token,
+        {method:"POST",headers:hdr,body:JSON.stringify({requests:[{insertDimension:{range:{sheetId:gid,dimension:"ROWS",startIndex:s.__after,endIndex:s.__after+1},inheritFromBefore:true}}]})});
+      const row=s.__after+1, ab=stepAB(s), d3=[];
+      const pv=(c,val)=>{ if(val!=="" && val!=null) d3.push({range:`${q(tab)}!${colL(c)}${row}`, values:[[val]]}); };
+      pv(0,ab.A);pv(1,ab.B);pv(3,fmtSheetDate(s.planStart));pv(4,fmtSheetDate(s.planEnd));pv(5,fmtSheetDate(s.actualEnd));pv(7,s.deliverStd||"");pv(9,s.issue||"");
+      if(d3.length) await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`,token,
+        {method:"POST",headers:hdr,body:JSON.stringify({valueInputOption:"USER_ENTERED",data:d3})});
+      appended++;
+    }
   }
   return { updated:data.length, appended };
 }
