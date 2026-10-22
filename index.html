@@ -1426,39 +1426,54 @@ function stepAB(s){ // 回寫用：優先用 codeA/taskB；退而用 name 以｜
   return { A:"", B:nm.trim() }; }
 function colL(n){ let s=""; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
 function fmtSheetDate(isoStr){ if(!isoStr)return ""; const d=new Date(isoStr); return d.getUTCFullYear()+"/"+(d.getUTCMonth()+1)+"/"+d.getUTCDate(); }
+// 回寫：以 Sheets API 重新讀該分頁（實際列號可靠），用「步驟代碼(A)+執行步驟(B)」內容比對找到正確的列再寫；
+// 找不到對應列者＝新增步驟，插在步驟表最後一列之後。不依賴 gviz 的壓縮列序，避免跑位。
+async function sheetsFetchJson(url,token,opts){ const r=await fetch(url,Object.assign({headers:{Authorization:"Bearer "+token}},opts||{})); if(!r.ok) throw new Error(`${r.status}：${(await r.text()).slice(0,160)}`); return r.json(); }
 async function writeBackSteps(p){
   const token=await getWriteToken();
   const sid=getStepSheetId();
   const tab=(p.ptscTab&&p.ptscTab.trim())?p.ptscTab.trim():p.name;
   const q=t=>"'"+String(t).replace(/'/g,"''")+"'";
-  const data=[], appends=[];
+  const T=x=>(x==null?"":String(x)).trim();
+  // 1) 以 Sheets API 讀整個分頁（列號可靠、含空白列）
+  const got=await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${encodeURIComponent(q(tab)+"!A1:K3000")}`,token);
+  const rows=got.values||[];
+  const hR=rows.findIndex(r=> T(r&&r[1])==="執行步驟" || T(r&&r[0])==="序");
+  if(hR<0) throw new Error("找不到步驟表頭（序 / 執行步驟），請確認分頁名稱");
+  const codeRe=/^\s*\d+\.\d+/;
+  const sheetSteps=[]; let lastStepRow=hR+1;
+  for(let i=hR+1;i<rows.length;i++){ const A=T(rows[i]&&rows[i][0]); if(!codeRe.test(A))continue;
+    sheetSteps.push({row:i+1,A,B:T(rows[i]&&rows[i][1]),hasDE:!!(T(rows[i][3])&&T(rows[i][4]))}); lastStepRow=i+1; }
+  // 2) 比對：命中→更新該列；未命中→待新增
+  const used=new Set(), data=[], toInsert=[];
   const put=(row,c,val)=>{ if(val!=="" && val!=null) data.push({range:`${q(tab)}!${colL(c)}${row}`, values:[[val]]}); };
-  for(const s of p.steps){
-    if(s._row==null){ appends.push(s); continue; }          // 系統新增、雲端沒有的 → 插入新列
-    const ab=stepAB(s), row=s._row;
-    put(row,0,ab.A); put(row,1,ab.B);                        // A 步驟、B 執行步驟
-    put(row,5,fmtSheetDate(s.actualEnd));                    // F 實際完成
-    put(row,7,s.deliverStd||"");                             // H 交付標準
-    put(row,9,s.issue||"");                                  // J 異常/改善
-    if(!s._hadDates){ put(row,3,fmtSheetDate(s.planStart)); put(row,4,fmtSheetDate(s.planEnd)); } // 雲端 D/E 原本空才寫
-    // 不回寫 C(負責人)、G(狀態)
-  }
-  if(data.length){
-    const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`,{
-      method:"POST", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
-      body:JSON.stringify({valueInputOption:"USER_ENTERED", data}) });
-    if(!r.ok) throw new Error("更新失敗 "+r.status+"："+(await r.text()).slice(0,180));
-  }
+  const writeRow=(row,s,hasDE)=>{ const ab=stepAB(s);
+    put(row,0,ab.A); put(row,1,ab.B); put(row,5,fmtSheetDate(s.actualEnd)); put(row,7,s.deliverStd||""); put(row,9,s.issue||"");
+    if(!hasDE){ put(row,3,fmtSheetDate(s.planStart)); put(row,4,fmtSheetDate(s.planEnd)); } };  // 雲端 D/E 原本空才寫；不寫 C(負責人)、G(狀態)
+  for(const s of p.steps){ const ab=stepAB(s);
+    const hit=sheetSteps.find(ss=>!used.has(ss.row) && ss.A===ab.A && ss.B===ab.B);
+    if(hit){ used.add(hit.row); writeRow(hit.row,s,hit.hasDE); }
+    else toInsert.push(s); }
+  // 3) 更新既有列
+  if(data.length) await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`,token,
+    {method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({valueInputOption:"USER_ENTERED",data})});
+  // 4) 新增步驟：在步驟表最後一列之後插入 N 列，再寫入（需要 gid）
   let appended=0;
-  for(const s of appends){
-    const ab=stepAB(s);
-    const vals=[ab.A, ab.B, "", fmtSheetDate(s.planStart), fmtSheetDate(s.planEnd), fmtSheetDate(s.actualEnd), "", s.deliverStd||"", "", s.issue||""];
-    const rng=encodeURIComponent(`${q(tab)}!A1`);
-    const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/${rng}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,{
-      method:"POST", headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
-      body:JSON.stringify({values:[vals]}) });
-    if(!r.ok) throw new Error("插入失敗 "+r.status+"："+(await r.text()).slice(0,180));
-    appended++;
+  if(toInsert.length){
+    const meta=await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}?fields=sheets.properties(sheetId,title)`,token);
+    const sp=(meta.sheets||[]).find(x=>x.properties&&x.properties.title===tab);
+    if(!sp) throw new Error("找不到分頁「"+tab+"」的 gid");
+    const gid=sp.properties.sheetId, N=toInsert.length;
+    await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`,token,
+      {method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+       body:JSON.stringify({requests:[{insertDimension:{range:{sheetId:gid,dimension:"ROWS",startIndex:lastStepRow,endIndex:lastStepRow+N},inheritFromBefore:true}}]})});
+    const data2=[];
+    toInsert.forEach((s,k)=>{ const row=lastStepRow+1+k, ab=stepAB(s);
+      const pv=(c,val)=>{ if(val!=="" && val!=null) data2.push({range:`${q(tab)}!${colL(c)}${row}`, values:[[val]]}); };
+      pv(0,ab.A);pv(1,ab.B);pv(3,fmtSheetDate(s.planStart));pv(4,fmtSheetDate(s.planEnd));pv(5,fmtSheetDate(s.actualEnd));pv(7,s.deliverStd||"");pv(9,s.issue||""); });
+    if(data2.length) await sheetsFetchJson(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`,token,
+      {method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({valueInputOption:"USER_ENTERED",data:data2})});
+    appended=N;
   }
   return { updated:data.length, appended };
 }
