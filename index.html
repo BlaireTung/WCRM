@@ -945,6 +945,7 @@ function drawProject(p){
       const issSpan=el("span","edt",s.issue||'（無）');issSpan.contentEditable=true;
       issSpan.onblur=()=>{s.issue=issSpan.textContent.trim()==='（無）'?'':issSpan.textContent.trim();save();};
       line3.append(document.createTextNode('異常／改善：'),issSpan);
+      if(s.phase){ const ph=el("span","badge s-tiff",s.phase);ph.style.cssText="padding:1px 7px;margin-right:6px";info.append(ph); }  // 顯示階段
       info.append(nm);
       if(s.sign)info.insertAdjacentHTML('beforeend','<span class="tag">需客戶簽回</span>');
       if(late)info.insertAdjacentHTML('beforeend','<span class="badge s-red" style="margin-left:6px;padding:1px 7px">逾期</span>');
@@ -1297,15 +1298,20 @@ function parseStepSheet(resp){
   let hR=grid.findIndex(row=>row && ((row[1]&&txt(row[1].v)==="執行步驟")||(row[0]&&txt(row[0].v)==="序")));
   if(hR<0) return [];
   const steps=[]; let phase="其他";
+  const codeRe=/^(\d+)\.(\d+)/;                                     // 步驟代碼，如 3.1、4.2
   for(let r=hR+1;r<grid.length;r++){
     const as=txt(v(r,0)), bs=txt(v(r,1));
-    if(!bs && /階段/.test(as)){ phase=matchPhase(as); continue; }   // 階段分隔列
     if(!as && !bs) continue;
-    const code=(/^\d/.test(as) && as!==bs)?as:"";
+    if(/階段/.test(as) && !bs){ phase=matchPhase(as); continue; }   // 若有階段分隔列
+    // 只認「A 欄＝數字.數字 代碼」的列為真正步驟；頂部彙總(A空)、提示列、test 等一律略過
+    const mm=as.match(codeRe);
+    if(!mm) continue;
+    const pn=parseInt(mm[1],10);
+    const stepPhase=(pn>=1&&pn<=PHASES.length)?PHASES[pn-1]:(phase||"其他");  // 階段由代碼首碼推得
     const H=txt(v(r,7)), J=txt(v(r,9));                             // H 交付標準、J 異常/改善
     const hadDates=!!(txt(v(r,3)) && txt(v(r,4)));                  // 雲端 D(預計開始)+E(完成期限) 是否都已填
     steps.push({ id:uid(), src:"gsheet", _row:r+1, _hadDates:hadDates,   // _row：對應雲端列號（寫回用）
-      phase, codeA:code, taskB:bs, name:[code,bs].filter(Boolean).join("｜")||as,
+      phase:stepPhase, codeA:as, taskB:bs, name:[as,bs].filter(Boolean).join("｜"),
       owner:txt(v(r,2)),
       planStart:iso(gdate(cell(r,3))), planEnd:iso(gdate(cell(r,4))), actualStart:null, actualEnd:iso(gdate(cell(r,5))),
       status:mapStepStatus(v(r,6)), deliverStd:H, issue:J,
@@ -1317,11 +1323,11 @@ function applyStepSheet(p,steps){
   if(!p.steps) p.steps=[];
   const base=p.startDate?new Date(p.startDate):today();
   steps.forEach(s=>{ if(!s.planStart)s.planStart=base.toISOString(); if(!s.planEnd)s.planEnd=s.planStart; });
-  const sig=arr=>JSON.stringify((arr||[]).filter(s=>s.src==="gsheet").map(s=>[s.phase,s.name,s.owner,s.planStart,s.planEnd,s.actualEnd,s.status,s.deliverStd,s.issue]));
+  const sig=arr=>JSON.stringify((arr||[]).map(s=>[s.phase,s.name,s.owner,s.planStart,s.planEnd,s.actualEnd,s.status,s.deliverStd,s.issue]));
   const before=sig(p.steps);
-  const manual=p.steps.filter(s=>s.src!=="gsheet");                 // 保留系統內手動新增的步驟
-  const hadG=p.steps.some(s=>s.src==="gsheet");
-  if(steps.length>0 || hadG){ p.steps=steps.concat(manual); }       // 雲端步驟在前、手動步驟在後
+  // 以雲端 PTSC 步驟「完整取代」系統步驟（不保留建案時的 13 步範本或殘留）；
+  // 本次開啟後才在系統手動新增的步驟不受影響（同步每次開啟只跑一次）。
+  if(steps.length>0){ p.steps=steps; }
   return { n:steps.length, changed: before!==sig(p.steps), empty:steps.length===0 };
 }
 async function syncStepsFromSheet(p){
