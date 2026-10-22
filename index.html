@@ -187,19 +187,19 @@
 /* ============ 資料模型 ============ */
 const PHASES = ["前置階段","啟動階段","規劃階段","安裝部署階段","AI訓練階段","結案階段"];
 const TEMPLATE = [
-  {no:1, phase:"前置階段", name:"調研及需求收斂", owner:"業務", days:7, docs:["調研表"]},
-  {no:2, phase:"前置階段", name:"方案擬定及報價", owner:"業務/Presale", days:10, docs:["服務建議書","報價單"]},
-  {no:3, phase:"啟動階段", name:"成立專案團隊", owner:"業務/PM", days:5, docs:["雲端共享資料夾"]},
-  {no:4, phase:"啟動階段", name:"業務及 Presale 交接", owner:"業務/PM/場務", days:5, docs:["專案 PTSC"]},
-  {no:5, phase:"規劃階段", name:"客戶現況訪談", owner:"PM/業務", days:7, docs:["現況訪談問卷(客戶簽回)","點位表確認文件(客戶簽回)"], sign:true},
-  {no:6, phase:"規劃階段", name:"專案啟動會議", owner:"PM/業務", days:3, docs:["結案目標(簽回)","專案三表","甘特圖"], sign:true},
-  {no:7, phase:"安裝部署階段", name:"感測器、設備進場及安裝", owner:"PM/場務/協力廠商", days:14, docs:["施工照片","驗收單(客戶簽回)"], sign:true},
-  {no:8, phase:"安裝部署階段", name:"訊號串接部署", owner:"PM/場務/協力廠商", days:10, docs:["測試報告","Table Schema","感測器位置合理性確認"]},
-  {no:9, phase:"AI訓練階段", name:"AI 模型訓練", owner:"AI小組/PM", days:14, docs:["需求模型"]},
-  {no:10, phase:"AI訓練階段", name:"控制邏輯開發", owner:"AI小組/PM", days:14, docs:["控制程式"]},
-  {no:11, phase:"AI訓練階段", name:"效能調校及試車", owner:"AI小組/PM/場務", days:14, docs:["調校後模型","測試報告"]},
-  {no:12, phase:"結案階段", name:"結案報告製作", owner:"AI小組/PM", days:7, docs:["結案報告"]},
-  {no:13, phase:"結案階段", name:"結案報告提報", owner:"PM/AI小組/業務", days:3, docs:["發票","教育訓練手冊"]},
+  {no:1, code:"1.1", phase:"前置階段", name:"調研及需求收斂", owner:"業務", days:7, docs:["調研表"]},
+  {no:2, code:"1.2", phase:"前置階段", name:"方案擬定及報價", owner:"業務/Presale", days:10, docs:["服務建議書","報價單"]},
+  {no:3, code:"2.1", phase:"啟動階段", name:"成立專案團隊", owner:"業務/PM", days:5, docs:["雲端共享資料夾"]},
+  {no:4, code:"2.2", phase:"啟動階段", name:"業務及presale交接", owner:"業務/PM/場務", days:5, docs:["專案 PTSC"]},
+  {no:5, code:"3.1", phase:"規劃階段", name:"客戶現況訪談", owner:"PM/業務", days:7, docs:["現況訪談問卷(客戶簽回)","點位表確認文件(客戶簽回)"], sign:true},
+  {no:6, code:"3.2", phase:"規劃階段", name:"專案啟動會議", owner:"PM/業務", days:3, docs:["結案目標(簽回)","專案三表","甘特圖"], sign:true},
+  {no:7, code:"4.1", phase:"安裝部署階段", name:"感測器、設備進場及安裝", owner:"PM/場務/協力廠商", days:14, docs:["施工照片","驗收單(客戶簽回)"], sign:true},
+  {no:8, code:"4.2", phase:"安裝部署階段", name:"訊號串接部署", owner:"PM/場務/協力廠商", days:10, docs:["測試報告","Table Schema","感測器位置合理性確認"]},
+  {no:9, code:"5.1", phase:"AI訓練階段", name:"AI模型訓練", owner:"AI小組/PM", days:14, docs:["需求模型"]},
+  {no:10, code:"5.2", phase:"AI訓練階段", name:"控制邏輯開發", owner:"AI小組/PM", days:14, docs:["控制程式"]},
+  {no:11, code:"5.3", phase:"AI訓練階段", name:"效能調校及試車", owner:"AI小組/PM/場務", days:14, docs:["調校後模型","測試報告"]},
+  {no:12, code:"6.1", phase:"結案階段", name:"結案報告", owner:"AI小組/PM", days:7, docs:["結案報告"]},
+  {no:13, code:"6.2", phase:"結案階段", name:"提報", owner:"PM/AI小組/業務", days:3, docs:["發票","教育訓練手冊"]},
 ];
 const STEP_STATUS = ["未開始","進行中","待客戶簽回","已完成"];
 const SEVERITY = {"緊急":4,"高":8,"一般":24,"低":72}; // SLA 小時
@@ -251,7 +251,8 @@ function buildSteps(start,due){
     acc+=t.days;
     let pe=addDays(start, Math.round(acc/total*win)-1);
     if(pe<ps)pe=new Date(ps);
-    return {id:uid(),no:t.no,phase:t.phase,name:t.name,owner:t.owner,docs:t.docs.slice(),sign:!!t.sign,
+    return {id:uid(),no:t.no,code:t.code,codeA:t.code,taskB:t.name,phase:t.phase,name:t.code+"｜"+t.name,owner:t.owner,
+      deliverStd:t.docs.join("\n"),issue:"",docs:t.docs.slice(),sign:!!t.sign,
       planStart:ps.toISOString(),planEnd:pe.toISOString(),actualStart:null,actualEnd:null,status:"未開始"};
   });
 }
@@ -892,7 +893,7 @@ function drawProject(p){
       const si=stepSyncInfo[p.id];
       const badge=el("span",null,si?si.text:`PTSC 分頁：${p.ptscTab||p.name}`);badge.id="stepSyncBadge";badge.className="badge "+(si?si.cls:"s-grey");badge.style.padding="3px 9px";
       const rbtn=el("button","btn ghost mini needEdit","↻ 重新讀取");
-      rbtn.onclick=()=>{ __stepSynced.delete(p.id); autoSyncSteps(p); };
+      rbtn.onclick=()=>{ autoSyncSteps(p, true); };
       const wbtn=el("button","btn ghost mini needEdit","⤴ 回寫 PTSC");wbtn.title="把系統步驟寫回 PTSC 雲端表（用你的 Google 帳號）";
       wbtn.onclick=async()=>{
         if(!getOAuthClientId()){ alert("尚未設定 OAuth 用戶端 ID。請到「資料/設定」頁的 PTSC 區塊貼上，並確認已在 Google Cloud 開啟 Sheets API。"); return; }
@@ -908,12 +909,19 @@ function drawProject(p){
       sr.append(badge,rbtn,wbtn);m.append(sr);
       if(getOAuthClientId()) ensureGis().catch(()=>{});   // 預載 Google 登入元件，讓按鈕點下即可授權
     }
-    m.append(el("div","gphase",'名稱／交付／異常文字可直接點改；拖曳左側 ⠿ 把手調整順序、» 設為子項(如 6.1)／« 升回主項、✕ 刪除；最下方可新增。開啟此頁會自動從 PTSC 雲端表更新（手動改的步驟保留）。'));
+    m.append(el("div","gphase",'※ 每天開啟此頁的「第一次」會自動從 PTSC 同步；之後若雲端有異動，請按「↻ 重新讀取」手動同步。名稱開頭的代碼(如 4.1)可直接改來移動步驟到該階段；拖曳 ⠿ 把手微調順序；交付／異常可多行輸入(Enter 換行)。六階段固定、13 步驟可移動改名。'));
     const list=el("div","steplist");
     let dragIdx=null;
     const clearMarks=()=>list.querySelectorAll(".step").forEach(x=>x.classList.remove("dropbefore","dropafter","dragging"));
+    let curPhase=null, phSeq=0;
     p.steps.forEach((s,idx)=>{
       const late=stepLate(s);
+      const ph=phaseOfStep(s);
+      if(ph!==curPhase){ curPhase=ph; phSeq++;                 // 階段群組標題（六階段固定、不可拖曳）
+        const hd=el("div","phasehdr");hd.style.cssText="display:flex;align-items:center;gap:8px;margin:12px 0 4px;font-weight:700";
+        hd.innerHTML=`<span class="badge s-tiff" style="padding:2px 9px">${phSeq}</span><span>${esc(ph)}</span>`;
+        list.append(hd);
+      }
       const r=el("div","step"+(s.sub?" sub":""));
       // 拖曳把手
       const grip=el("div","grip","⠿");grip.draggable=true;grip.title="拖曳調整順序";
@@ -934,18 +942,32 @@ function drawProject(p){
       // 可編輯名稱 + 產出文件
       const info=el("div","sinfo");
       const nm=el("b","edt",s.name);nm.contentEditable=true;
-      nm.onblur=()=>{s.name=nm.textContent.trim()||s.name;save();};
-      const line2=el("small");
-      const delv0 = (s.deliverStd!=null) ? s.deliverStd : (s.docs||[]).join('、');
-      const delSpan=el("span","edt",delv0||'（無）');delSpan.contentEditable=true;   // 交付標準(H)
-      delSpan.onblur=()=>{const t=delSpan.textContent.trim();s.deliverStd=t;s.docs=t?t.split(/[、,，]/).map(x=>x.trim()).filter(Boolean):[];save();};
-      line2.append(document.createTextNode(`負責：${s.owner}　·　交付：`),delSpan);
-      // 異常／改善計畫(J)
+      nm.onblur=()=>{ const t=nm.innerText.trim(); if(!t){ nm.textContent=s.name; return; }
+        const oldCode=s.codeA||"";
+        const i=t.indexOf("｜");                                   // 以「｜」切分：前＝代碼(含步驟名)、後＝執行任務
+        if(i>=0){ s.codeA=t.slice(0,i).trim(); s.taskB=t.slice(i+1).trim(); }
+        else { s.codeA=t; s.taskB=""; }
+        s.name=(s.codeA?s.codeA+"｜":"")+(s.taskB||"");
+        if((s.codeA||"")!==oldCode){ regroupSteps(p); logAction("專案",p.name,"修改",`步驟移動／改碼：${s.name}（${phaseOfStep(s)}）`); }
+        save(); drawProject(p); };
+      const grow=ta=>{ ta.style.height='auto'; ta.style.height=(ta.scrollHeight+2)+'px'; };
+      const line2=el("small");line2.style.display="block";
+      line2.append(document.createTextNode(`負責：${s.owner||''}　·　交付：`));
+      const delv0 = (s.deliverStd!=null) ? s.deliverStd : (s.docs||[]).join('\n');
+      const delTa=el("textarea");delTa.value=delv0||"";delTa.rows=1;delTa.placeholder="（無）";
+      delTa.style.cssText="width:100%;font:inherit;resize:vertical;border:1px solid var(--line);border-radius:6px;padding:3px 6px;white-space:pre-wrap;overflow:hidden";
+      delTa.oninput=()=>grow(delTa);
+      delTa.onchange=()=>{ s.deliverStd=delTa.value.replace(/[ \t]+$/gm,'').trim(); s.docs=s.deliverStd?s.deliverStd.split(/\n+/).map(x=>x.trim()).filter(Boolean):[]; save(); };
+      line2.append(delTa);
+      // 異常／改善計畫(J)，多行
       const line3=el("small");line3.style.display="block";
-      const issSpan=el("span","edt",s.issue||'（無）');issSpan.contentEditable=true;
-      issSpan.onblur=()=>{s.issue=issSpan.textContent.trim()==='（無）'?'':issSpan.textContent.trim();save();};
-      line3.append(document.createTextNode('異常／改善：'),issSpan);
-      if(s.phase){ const ph=el("span","badge s-tiff",s.phase);ph.style.cssText="padding:1px 7px;margin-right:6px";info.append(ph); }  // 顯示階段
+      line3.append(document.createTextNode('異常／改善：'));
+      const issTa=el("textarea");issTa.value=s.issue||"";issTa.rows=1;issTa.placeholder="（無）";
+      issTa.style.cssText="width:100%;font:inherit;resize:vertical;border:1px solid var(--line);border-radius:6px;padding:3px 6px;white-space:pre-wrap;overflow:hidden";
+      issTa.oninput=()=>grow(issTa);
+      issTa.onchange=()=>{ s.issue=issTa.value.replace(/[ \t]+$/gm,'').trim(); save(); };
+      line3.append(issTa);
+      setTimeout(()=>{grow(delTa);grow(issTa);},0);   // 載入後自動撐高以顯示多行
       info.append(nm);
       if(s.sign)info.insertAdjacentHTML('beforeend','<span class="tag">需客戶簽回</span>');
       if(late)info.insertAdjacentHTML('beforeend','<span class="badge s-red" style="margin-left:6px;padding:1px 7px">逾期</span>');
@@ -976,20 +998,24 @@ function drawProject(p){
     });
     m.append(list);
     const addBox=el("div","card");addBox.style.cssText="box-shadow:none;background:var(--tiffany-bg);padding:10px 12px;margin-top:10px";
-    addBox.append(el("label",null,"新增步驟（填完按新增，不會跳窗）"));
-    const fr=el("div","f3");
-    const nName=el("input");nName.placeholder="步驟名稱";
-    const nOwner=el("input");nOwner.placeholder="負責人";
-    const nDocs=el("input");nDocs.placeholder="產出文件（用、分隔）";
-    fr.append(nName,nOwner,nDocs);addBox.append(fr);
+    addBox.append(el("label",null,"新增步驟（填完按新增，不會跳窗；填「步驟編號」如 4.1 會插入到該階段/編號的下方）"));
+    const fr=el("div");fr.style.cssText="display:flex;gap:6px;flex-wrap:wrap";
+    const nCode=el("input");nCode.placeholder="步驟編號(如4.1)";nCode.style.cssText="width:120px;flex:none";
+    const nName=el("input");nName.placeholder="步驟名稱";nName.style.flex="1";
+    const nOwner=el("input");nOwner.placeholder="負責人";nOwner.style.cssText="width:110px;flex:none";
+    fr.append(nCode,nName,nOwner);addBox.append(fr);
     const addBtn=el("button","btn mini","＋ 新增步驟");addBtn.style.marginTop="8px";
     addBtn.onclick=()=>{ if(!nName.value.trim()){nName.focus();return;}
+      const code=nCode.value.trim();
       const prev=p.steps[p.steps.length-1];
       const ps=prev?addDays(prev.planEnd,1):(p.startDate?new Date(p.startDate):today());
-      p.steps.push({id:uid(),phase:prev?prev.phase:"其他",name:nName.value.trim(),owner:nOwner.value.trim(),
-        docs:nDocs.value.split(/[、,，]/).map(x=>x.trim()).filter(Boolean),sign:false,sub:false,
-        planStart:ps.toISOString(),planEnd:addDays(ps,5).toISOString(),actualStart:null,actualEnd:null,status:"未開始"});
-      logAction("專案",p.name,"新增",`步驟「${nName.value.trim()}」`);
+      const ns={id:uid(),codeA:code,taskB:nName.value.trim(),phase:"其他",name:(code?code+"｜":"")+nName.value.trim(),owner:nOwner.value.trim(),
+        deliverStd:"",issue:"",docs:[],sign:false,sub:false,
+        planStart:ps.toISOString(),planEnd:addDays(ps,5).toISOString(),actualStart:null,actualEnd:null,status:"未開始"};
+      ns.phase=phaseOfStep(ns);
+      p.steps.push(ns); regroupSteps(p);                 // 依編號插入到正確位置（同編號則排在其下方）
+      logAction("專案",p.name,"新增",`步驟「${ns.name}」`);
+      nCode.value="";nName.value="";nOwner.value="";
       save();drawProject(p);
     };
     addBox.append(addBtn);m.append(addBox);
@@ -1327,9 +1353,15 @@ function applyStepSheet(p,steps){
   const before=sig(p.steps);
   // 以雲端 PTSC 步驟「完整取代」系統步驟（不保留建案時的 13 步範本或殘留）；
   // 本次開啟後才在系統手動新增的步驟不受影響（同步每次開啟只跑一次）。
-  if(steps.length>0){ p.steps=steps; }
+  if(steps.length>0){ p.steps=steps; regroupSteps(p); }
   return { n:steps.length, changed: before!==sig(p.steps), empty:steps.length===0 };
 }
+// 依步驟代碼(x.y)分組排序：階段(首碼)→步驟序(次碼)→原順序（穩定）
+function stepCodeKey(s){ const m=(s.codeA||s.name||"").match(/(\d+)\.(\d+)/); if(m) return [parseInt(m[1],10),parseInt(m[2],10)];
+  const pi=PHASES.indexOf(s.phase); return [pi>=0?pi+1:99, 99]; }
+function phaseOfStep(s){ const m=(s.codeA||s.name||"").match(/^\s*(\d+)\./); if(m){ const n=parseInt(m[1],10); if(n>=1&&n<=PHASES.length) return PHASES[n-1]; } return s.phase||"其他"; }
+function regroupSteps(p){ if(!p.steps)return;
+  p.steps=p.steps.map((s,i)=>({s,i})).sort((a,b)=>{ const ka=stepCodeKey(a.s),kb=stepCodeKey(b.s); return ka[0]-kb[0]||ka[1]-kb[1]||a.i-b.i; }).map(x=>{ x.s.phase=phaseOfStep(x.s); return x.s; }); }
 async function syncStepsFromSheet(p){
   const tab=(p.ptscTab&&p.ptscTab.trim())?p.ptscTab.trim():p.name;
   const resp=await gvizFetch(getStepSheetId(), tab);
@@ -1338,17 +1370,27 @@ async function syncStepsFromSheet(p){
 }
 const stepSyncInfo={}; const __stepSynced=new Set();
 function setStepSync(p,cls,text){ stepSyncInfo[p.id]={cls,text}; const b=$("#stepSyncBadge"); if(b){ b.className="badge "+cls; b.textContent=text; } }
-async function autoSyncSteps(p){
+// 每日第一次自動同步的紀錄（跨 session 持久）
+function todayStr(){ const d=new Date(),z=n=>String(n).padStart(2,'0'); return d.getFullYear()+"-"+z(d.getMonth()+1)+"-"+z(d.getDate()); }
+function stepDayMap(){ try{ return JSON.parse(localStorage.getItem("husu_stepsync_day")||"{}"); }catch(e){ return {}; } }
+function stepDaySet(pid){ try{ const m=stepDayMap(); m[pid]=todayStr(); localStorage.setItem("husu_stepsync_day",JSON.stringify(m)); }catch(e){} }
+async function autoSyncSteps(p, manual){
   if(!getStepSheetId()||!canEditProject(p)) return;
-  if(__stepSynced.has(p.id)) return;
-  __stepSynced.add(p.id);
+  if(!manual){
+    if(__stepSynced.has(p.id)) return;
+    __stepSynced.add(p.id);
+    if(stepDayMap()[p.id]===todayStr()){                 // 今天已自動同步過 → 不再自動（需手動）
+      setStepSync(p,"s-grey","今日已自動同步；如需更新請按「↻ 重新讀取」"); return;
+    }
+  }
   setStepSync(p,"s-amber","⟳ 從 PTSC 同步中…");
   try{
     const r=await syncStepsFromSheet(p);
     if(r.empty){ setStepSync(p,"s-red",`⚠ 讀不到分頁「${p.ptscTab||p.name}」或無步驟`); return; }
+    stepDaySet(p.id);                                     // 記錄今天已同步
     if(r.changed){
       setStepSync(p,"s-green",`✓ 已從 PTSC 同步（${fmtHM()}）`);
-      logAction("專案",p.name,"修改",`從 PTSC 自動同步步驟（${r.n} 步）`);
+      logAction("專案",p.name,"修改",`從 PTSC 同步步驟（${r.n} 步）`);
       save();
       if(subTab==="steps" && $("#modalBg").classList.contains("on")) drawProject(p);
     }else{ setStepSync(p,"s-green",`✓ 已是最新（${fmtHM()}）`); }
@@ -1377,9 +1419,11 @@ async function getWriteToken(){
     tc.requestAccessToken({prompt:""});
   }catch(e){ rej(e); } });
 }
-function stepAB(s){ const nm=s.name||""; const i=nm.indexOf("｜");
+function stepAB(s){ // 回寫用：優先用 codeA/taskB；退而用 name 以｜切分
+  if(s.codeA!=null || s.taskB!=null) return { A:(s.codeA||"").trim(), B:(s.taskB||"").trim() };
+  const nm=s.name||""; const i=nm.indexOf("｜");
   if(i>=0) return { A:nm.slice(0,i).trim(), B:nm.slice(i+1).trim() };
-  return { A:(s.codeA||"").trim(), B:(s.taskB||nm).trim() }; }
+  return { A:"", B:nm.trim() }; }
 function colL(n){ let s=""; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
 function fmtSheetDate(isoStr){ if(!isoStr)return ""; const d=new Date(isoStr); return d.getUTCFullYear()+"/"+(d.getUTCMonth()+1)+"/"+d.getUTCDate(); }
 async function writeBackSteps(p){
